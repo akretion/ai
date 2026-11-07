@@ -82,6 +82,18 @@ class TestHermesTools(TransactionCase):
         tool.field_names = "name, vat ,"
         self.assertEqual(tool._as_tool_dict()["fields"], ["name", "vat"])
 
+    def test_fields_get_is_implied_by_a_read_grant(self):
+        tool = self.env["hermes.tool"]._resolve_for_user_model(
+            self.user, "res.partner", "fields_get"
+        )
+        self.assertIsNotNone(tool)
+
+    def test_implied_fields_get_does_not_grant_reading(self):
+        tool = self.env["hermes.tool"]._resolve_for_user_model(
+            self.user, "sale.order", "fields_get"
+        )
+        self.assertIsNone(tool)
+
     def test_user_without_group_has_no_tool(self):
         tool_model = self.env["hermes.tool"]
         tool_model.env.ref("ai_oca_bridge_hermes.tool_partners").allowed_group_ids = [

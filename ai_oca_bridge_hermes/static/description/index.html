@@ -839,6 +839,24 @@ the key can be revoked from the same screen.</p>
 The hand-off is therefore one-shot: if the gateway loses it, the user
 reconnects.</p>
 </div>
+<div class="section" id="letting-the-assistant-use-odoo-tools">
+<h2>Letting the assistant use Odoo tools</h2>
+<p>A connected user can also let the assistant <em>query</em> Odoo through a
+whitelist the customer controls: <strong>Hermes → Tools</strong>.</p>
+<p>Each record opens one model with one read method (<tt class="docutils literal">search_read</tt>,
+<tt class="docutils literal">read</tt>, <tt class="docutils literal">fields_get</tt>, <tt class="docutils literal">read_group</tt>), for the groups you choose,
+with a row cap and an optional field list. Two defaults ship for every
+internal user: <tt class="docutils literal">partners</tt> and <tt class="docutils literal">products</tt>, read only. To give a power
+user more, add a record for the model they need and put them in a
+dedicated group: nothing else changes, and the regular users never see
+it.</p>
+<p><tt class="docutils literal">fields_get</tt> is implied by any read grant on the same model, so the
+assistant can always inspect the schema it is allowed to read.</p>
+<p>The gateway checks every call against these records before running it,
+with the user’s own API key: a stale tool list or a prompt injection
+cannot widen what the whitelist allows, and writes are not exposed at
+all yet.</p>
+</div>
 <div class="section" id="troubleshooting">
 <h2>Troubleshooting</h2>
 <ul class="simple">
@@ -853,10 +871,8 @@ the secret does not match the one in Odoo.</li>
 <div class="section" id="known-issues-roadmap">
 <h3>Known issues / Roadmap</h3>
 <ul class="simple">
-<li>Tool exposure: let the model call whitelisted Odoo methods
-(<tt class="docutils literal">search_read</tt>, <tt class="docutils literal">read</tt>, <tt class="docutils literal">fields_get</tt>) instead of the gateway
-pre-fetching everything; the whitelist should live in Odoo and be
-enumerable by the agent</li>
+<li>Writes: <tt class="docutils literal">create</tt>/<tt class="docutils literal">write</tt> behind an explicit grant and a human
+confirmation in Discuss, on top of the read-only tools already shipped</li>
 <li>Multi-tenant routing: a shared Hermes instance serving several Odoo
 databases, one profile per tenant</li>
 <li>Per-tenant quotas and usage metering (in a child module or the

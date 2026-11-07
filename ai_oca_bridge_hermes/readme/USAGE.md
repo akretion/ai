@@ -127,6 +127,25 @@ the same screen.
 Note: Odoo stores API keys hashed, so a key cannot be read back later. The
 hand-off is therefore one-shot: if the gateway loses it, the user reconnects.
 
+## Letting the assistant use Odoo tools
+
+A connected user can also let the assistant *query* Odoo through a whitelist
+the customer controls: **Hermes → Tools**.
+
+Each record opens one model with one read method (`search_read`, `read`,
+`fields_get`, `read_group`), for the groups you choose, with a row cap and an
+optional field list. Two defaults ship for every internal user: `partners` and
+`products`, read only. To give a power user more, add a record for the model
+they need and put them in a dedicated group: nothing else changes, and the
+regular users never see it.
+
+`fields_get` is implied by any read grant on the same model, so the assistant
+can always inspect the schema it is allowed to read.
+
+The gateway checks every call against these records before running it, with the
+user's own API key: a stale tool list or a prompt injection cannot widen what
+the whitelist allows, and writes are not exposed at all yet.
+
 ## Troubleshooting
 
 - *Queue rows stay pending*: the gateway is not polling and push is disabled or

@@ -80,10 +80,19 @@ class HermesTool(models.Model):
 
     @api.model
     def _resolve_for_user_model(self, user, model_name, method):
-        """Grant lookup by (model, method): how the gateway validates a call."""
+        """Grant lookup by (model, method): how the gateway validates a call.
+
+        ``fields_get`` only exposes the schema Odoo already filters by access
+        rights, so it is implied by any read grant on the same model instead of
+        forcing administrators to duplicate a record per model.
+        """
         grants = self._for_user(user).filtered(
             lambda tool: tool.model_name == model_name and tool.method == method
         )
+        if not grants and method == "fields_get":
+            grants = self._for_user(user).filtered(
+                lambda tool: tool.model_name == model_name
+            )
         return grants[:1]._as_tool_dict() if grants else None
 
     def _as_tool_dict(self):

@@ -1,6 +1,5 @@
-- Tool exposure: let the model call whitelisted Odoo methods (`search_read`,
-  `read`, `fields_get`) instead of the gateway pre-fetching everything; the
-  whitelist should live in Odoo and be enumerable by the agent
+- Writes: `create`/`write` behind an explicit grant and a human confirmation
+  in Discuss, on top of the read-only tools already shipped
 - Multi-tenant routing: a shared Hermes instance serving several Odoo
   databases, one profile per tenant
 - Per-tenant quotas and usage metering (in a child module or the gateway, never
