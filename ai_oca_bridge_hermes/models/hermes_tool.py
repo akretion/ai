@@ -7,6 +7,7 @@ METHOD_SELECTION = [
     ("search_read", "Search and read"),
     ("read", "Read by ids"),
     ("fields_get", "Describe fields"),
+    ("search_count", "Count records"),
     ("read_group", "Group and aggregate"),
 ]
 
@@ -83,17 +84,24 @@ class HermesTool(models.Model):
         """Grant lookup by (model, method): how the gateway validates a call.
 
         ``fields_get`` only exposes the schema Odoo already filters by access
-        rights, so it is implied by any read grant on the same model instead of
-        forcing administrators to duplicate a record per model.
+        rights, and ``search_count`` only counts the rows the same grant already
+        lets the user read. Both are implied by a read grant on the same model,
+        so an administrator does not duplicate a record per model, and the
+        assistant does not have to page through thousands of rows to answer
+        "how many".
         """
         grants = self._for_user(user).filtered(
             lambda tool: tool.model_name == model_name and tool.method == method
         )
-        if not grants and method == "fields_get":
+        if not grants and method in ("fields_get", "search_count"):
             grants = self._for_user(user).filtered(
                 lambda tool: tool.model_name == model_name
             )
-        return grants[:1]._as_tool_dict() if grants else None
+        if not grants:
+            return None
+        tool = grants[:1]._as_tool_dict()
+        tool["method"] = method
+        return tool
 
     def _as_tool_dict(self):
         self.ensure_one()

@@ -88,6 +88,20 @@ class TestHermesTools(TransactionCase):
         )
         self.assertIsNotNone(tool)
 
+    def test_search_count_is_implied_by_a_read_grant(self):
+        tool = self.env["hermes.tool"]._resolve_for_user_model(
+            self.user, "res.partner", "search_count"
+        )
+        self.assertIsNotNone(tool)
+        self.assertEqual(tool["method"], "search_count")
+
+    def test_implied_search_count_does_not_grant_reading(self):
+        self.assertIsNone(
+            self.env["hermes.tool"]._resolve_for_user_model(
+                self.user, "account.move", "search_count"
+            )
+        )
+
     def test_implied_fields_get_does_not_grant_reading(self):
         tool = self.env["hermes.tool"]._resolve_for_user_model(
             self.user, "sale.order", "fields_get"

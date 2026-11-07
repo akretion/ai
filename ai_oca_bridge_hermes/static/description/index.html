@@ -850,8 +850,10 @@ internal user: <tt class="docutils literal">partners</tt> and <tt class="docutil
 user more, add a record for the model they need and put them in a
 dedicated group: nothing else changes, and the regular users never see
 it.</p>
-<p><tt class="docutils literal">fields_get</tt> is implied by any read grant on the same model, so the
-assistant can always inspect the schema it is allowed to read.</p>
+<p><tt class="docutils literal">fields_get</tt> and <tt class="docutils literal">search_count</tt> are implied by any read grant on the
+same model: the assistant can inspect the schema it may read and count
+rows without paging through them (a “how many invoices this month”
+answer costs one call instead of forty).</p>
 <p>The gateway checks every call against these records before running it,
 with the user’s own API key: a stale tool list or a prompt injection
 cannot widen what the whitelist allows, and writes are not exposed at

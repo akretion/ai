@@ -474,8 +474,10 @@ user more, add a record for the model they need and put them in a
 dedicated group: nothing else changes, and the regular users never see
 it.
 
-``fields_get`` is implied by any read grant on the same model, so the
-assistant can always inspect the schema it is allowed to read.
+``fields_get`` and ``search_count`` are implied by any read grant on the
+same model: the assistant can inspect the schema it may read and count
+rows without paging through them (a "how many invoices this month"
+answer costs one call instead of forty).
 
 The gateway checks every call against these records before running it,
 with the user's own API key: a stale tool list or a prompt injection
