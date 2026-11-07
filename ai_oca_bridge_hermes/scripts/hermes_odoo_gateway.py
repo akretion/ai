@@ -218,7 +218,9 @@ class OdooGatewayClient:
             response = f"Echo: {text}"
 
         # Send response back to Odoo
-        self._send_response(channel_id, response)
+        await self._send_response(
+            channel_id, response, queue_id=msg.get("queue_id") or msg.get("id")
+        )
 
     async def _get_agent_response(
         self, session_key: str, text: str, author_name: str
@@ -256,16 +258,18 @@ class OdooGatewayClient:
             logger.exception("Agent error:")
             return f"I encountered an error while processing your message: {e}"
 
-    def _send_response(self, channel_id: int, response: str):
+    async def _send_response(self, channel_id: int, response: str, queue_id=None):
         """Send response back to Odoo channel."""
         url = f"{self.odoo_url}/hermes/webhook/{self.webhook_token}"
         payload = {
             "channel_id": channel_id,
             "body": response,
         }
+        if queue_id:
+            payload["queue_id"] = queue_id
 
         try:
-            resp = self._client.post(url, json=payload)
+            resp = await self._client.post(url, json=payload)
             resp.raise_for_status()
             data = resp.json()
             # Handle Odoo JSON-RPC response structure

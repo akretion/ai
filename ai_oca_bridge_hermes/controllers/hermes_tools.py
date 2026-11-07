@@ -48,12 +48,7 @@ class HermesToolsController(http.Controller):
         # Validate auth token from Authorization header
         auth_header = request.httprequest.headers.get("Authorization", "")
         token = auth_header.replace("Bearer ", "").strip() if auth_header else ""
-
-        gateway = (
-            request.env["hermes.gateway"]
-            .sudo()
-            .search([("webhook_token", "=", token), ("active", "=", True)], limit=1)
-        )
+        gateway = request.env["hermes.gateway"].sudo()._find_by_token(token)
         if not gateway:
             return {"status": "error", "message": "Invalid token"}
 
@@ -91,12 +86,7 @@ class HermesToolsController(http.Controller):
         """List available tools with their schemas."""
         auth_header = request.httprequest.headers.get("Authorization", "")
         token = auth_header.replace("Bearer ", "").strip() if auth_header else ""
-
-        gateway = (
-            request.env["hermes.gateway"]
-            .sudo()
-            .search([("webhook_token", "=", token), ("active", "=", True)], limit=1)
-        )
+        gateway = request.env["hermes.gateway"].sudo()._find_by_token(token)
         if not gateway:
             return {"tools": [], "error": "Invalid token"}
 

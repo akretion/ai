@@ -136,9 +136,25 @@ class TestHermesGateway(TransactionCase):
     def test_discuss_channel_message_post_queues(self):
         """Test that posting a message queues it for Hermes."""
         self.channel.hermes_gateway_id = self.gateway.id
+        human = self.ResUsers.create(
+            {
+                "name": "Gateway Human",
+                "login": "gateway_human",
+                "groups_id": [
+                    (
+                        6,
+                        0,
+                        [
+                            self.env.ref("base.group_user").id,
+                            self.env.ref("ai_oca_bridge_hermes.group_hermes_user").id,
+                        ],
+                    )
+                ],
+            }
+        )
 
-        # Post as regular user (admin)
-        self.channel.with_user(self.env.user.id).message_post(
+        # Post as regular user
+        self.channel.with_user(human).message_post(
             body="<p>Hello Hermes</p>",
             message_type="comment",
         )
@@ -209,13 +225,15 @@ class TestHermesGateway(TransactionCase):
         result = webhook._format_body("Visit https://example.com")
         self.assertIn('<a href="https://example.com"', result)
 
-    def test_poll_rate_limiting(self):
-        """Test rate limiting on poll endpoint."""
-        from odoo import fields as odoo_fields
-
-        # Set last poll to now
-        self.gateway.last_poll = odoo_fields.Datetime.now()
-
-        # Simulate poll (would need HTTP test)
-        # This is a basic unit test - full integration test would use HttpCase
-        self.assertTrue(self.gateway.last_poll)
+    def test_poll_claiming_is_delegated(self):
+        """The poll endpoint relies on the atomic claim of the queue."""
+        message = self.HermesQueue.create(
+            {
+                "channel_id": self.channel.id,
+                "body": "<p>poll me</p>",
+                "gateway_id": self.gateway.id,
+            }
+        )
+        claimed = self.HermesQueue._claim_batch(self.gateway)
+        self.assertEqual(claimed, message)
+        self.assertEqual(message.state, "processing")

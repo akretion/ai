@@ -1,109 +1,87 @@
 # Copyright 2026-TODAY Akretion - Raphael Valyi <raphael.valyi@akretion.com>
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 
-from datetime import timedelta
+import logging
+import time
 
-from odoo import fields, http
+from odoo import http
 from odoo.http import request
+
+_logger = logging.getLogger(__name__)
+
+LONG_POLL_MAX = 20
+LONG_POLL_STEP = 0.5
 
 
 class HermesPoll(http.Controller):
-    """Endpoint for Hermes gateway to poll pending messages."""
+    """Polling endpoint, kept as the fallback of the realtime push."""
+
+    def _get_gateway(self, token):
+        return request.env["hermes.gateway"].sudo()._find_by_token(token)
 
     @http.route("/hermes/poll", type="json", auth="public", csrf=False)
     def hermes_poll(self, **kwargs):
-        """Return pending messages for Hermes to process.
+        """Return and claim pending messages for the gateway.
 
-        Hermes gateway polls this endpoint periodically to fetch
-        messages queued by Odoo users.
+        Claiming is atomic (``FOR UPDATE SKIP LOCKED``), so several gateway
+        workers and several Odoo workers can poll concurrently without
+        receiving the same message twice.
         """
-        # Validate auth token from Authorization header
         auth_header = request.httprequest.headers.get("Authorization", "")
         token = auth_header.replace("Bearer ", "").strip() if auth_header else ""
-
-        gateway = (
-            request.env["hermes.gateway"]
-            .sudo()
-            .search([("webhook_token", "=", token), ("active", "=", True)], limit=1)
-        )
+        gateway = self._get_gateway(token)
         if not gateway:
-            return {"messages": [], "error": "Invalid token"}
+            return {"status": "error", "error": "invalid_token", "messages": []}
 
-        # Rate limiting (1 second minimum between polls)
-        if (
-            gateway.last_poll
-            and (fields.Datetime.now() - gateway.last_poll).total_seconds() < 1
-        ):
-            return {"messages": [], "error": "Rate limited"}
+        queue = request.env["hermes.message.queue"].sudo()
+        queue._requeue_stale(gateway)
+        limit = gateway.max_batch_size or 50
+        messages = queue._claim_batch(gateway, limit=limit, worker="poll")
 
-        # Update last poll timestamp
-        gateway.sudo().write({"last_poll": fields.Datetime.now()})
+        wait = 0
+        if not messages and gateway.long_poll_timeout:
+            try:
+                wait = min(
+                    int(kwargs.get("wait") or 0),
+                    gateway.long_poll_timeout,
+                    LONG_POLL_MAX,
+                )
+            except (TypeError, ValueError):
+                wait = 0
+        if wait:
+            deadline = time.monotonic() + wait
+            while not messages and time.monotonic() < deadline:
+                time.sleep(LONG_POLL_STEP)
+                messages = queue._claim_batch(gateway, limit=limit, worker="poll")
 
-        # Reset messages stuck in processing for > 5 minutes
-        stuck_domain = [
-            ("state", "=", "processing"),
-            ("gateway_id", "=", gateway.id),
-            ("write_date", "<", fields.Datetime.now() - timedelta(minutes=5)),
-        ]
-        stuck = request.env["hermes.message.queue"].sudo().search(stuck_domain)
-        if stuck:
-            stuck.sudo().write({"state": "pending"})
-
-        # Fetch pending messages
-        pending = (
-            request.env["hermes.message.queue"]
-            .sudo()
-            .search(
-                [
-                    ("state", "=", "pending"),
-                    ("gateway_id", "=", gateway.id),
-                ],
-                order="create_date asc, id asc",
-                limit=50,
+        include_history = kwargs.get("include_history")
+        payload = []
+        for message in messages:
+            payload.append(
+                {
+                    "id": message.id,
+                    "queue_id": message.id,
+                    "channel_id": message.channel_id.id,
+                    "channel_name": message.channel_id.name,
+                    "body": message.body,
+                    "body_text": message.body_text,
+                    "author_id": message.author_id.id,
+                    "author_name": message.author_name,
+                    "user_id": message.user_id.id,
+                    "user_has_api_key": message.user_has_api_key,
+                    "session_key": message.session_key,
+                    "db_hash": message.db_hash,
+                    "delivery_id": message.delivery_id,
+                    "capabilities": gateway._get_capabilities(message),
+                    "create_date": message.create_date.isoformat()
+                    if message.create_date
+                    else None,
+                    "history": message._get_history() if include_history else [],
+                }
             )
-        )
-
-        messages = []
-        for msg in pending:
-            msg_data = {
-                "id": msg.id,
-                "channel_id": msg.channel_id.id,
-                "channel_name": msg.channel_id.name,
-                "body": msg.body,
-                "author_id": msg.author_id.id,
-                "author_name": msg.author_name,
-                "db_hash": msg.db_hash,
-                "create_date": msg.create_date.isoformat() if msg.create_date else None,
-            }
-            # Include history if requested
-            if kwargs.get("include_history"):
-                msg_data["history"] = self._get_channel_history(msg.channel_id)
-            messages.append(msg_data)
-            # Mark as processing so we don't send again on next poll
-            msg.sudo().write({"state": "processing"})
-
-        return {"messages": messages, "gateway_id": gateway.id}
-
-    def _get_channel_history(self, channel, limit=10):
-        """Get recent message history for context."""
-        messages = (
-            request.env["mail.message"]
-            .sudo()
-            .search(
-                [
-                    ("res_id", "=", channel.id),
-                    ("model", "=", "discuss.channel"),
-                    ("message_type", "=", "comment"),
-                ],
-                order="date desc",
-                limit=limit,
-            )
-        )
-        return [
-            {
-                "role": "assistant" if msg.author_id.user_ids.ai_bridge_id else "user",
-                "body": msg.body,
-                "date": msg.date.isoformat() if msg.date else None,
-            }
-            for msg in reversed(messages)
-        ]
+        return {
+            "status": "ok",
+            "gateway_id": gateway.id,
+            "tenant": gateway._get_tenant_info(),
+            "messages": payload,
+        }

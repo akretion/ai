@@ -2,8 +2,10 @@
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 
 import hashlib
+import uuid
+from datetime import timedelta
 
-from odoo import fields, models
+from odoo import _, fields, models
 
 
 class DiscussChannel(models.Model):
@@ -32,15 +34,19 @@ class DiscussChannel(models.Model):
 
         # For DM chats, check if one of the members is an AI user
         if self.channel_type == "chat":
-            for member in self.channel_member_ids:
+            for member in self.sudo().channel_member_ids:
                 if member.partner_id.user_ids.ai_bridge_id:
                     # Find a gateway using this AI user
-                    gateway = self.env["hermes.gateway"].search(
-                        [
-                            ("ai_user_id", "=", member.partner_id.user_ids.id),
-                            ("active", "=", True),
-                        ],
-                        limit=1,
+                    gateway = (
+                        self.env["hermes.gateway"]
+                        .sudo()
+                        .search(
+                            [
+                                ("ai_user_id", "in", member.partner_id.user_ids.ids),
+                                ("active", "=", True),
+                            ],
+                            limit=1,
+                        )
                     )
                     if gateway:
                         return gateway
@@ -85,6 +91,45 @@ class DiscussChannel(models.Model):
 
         return True
 
+    def _get_message_user(self, message):
+        """Return the internal user behind the message author, if any."""
+        return message.author_id.user_ids.filtered(lambda user: user.active)[:1]
+
+    def _post_hermes_access_denied(self, gateway):
+        """Answer once per cooldown that the user may not use Hermes."""
+        body = gateway.access_denied_message or _(
+            "You are not allowed to use the Hermes AI assistant."
+        )
+        ai_user = gateway.ai_user_id
+        if not ai_user:
+            return
+        cooldown = gateway.denial_cooldown_minutes or 0
+        if cooldown:
+            since = fields.Datetime.now() - timedelta(minutes=cooldown)
+            already_answered = (
+                self.env["mail.message"]
+                .sudo()
+                .search(
+                    [
+                        ("model", "=", "discuss.channel"),
+                        ("res_id", "=", self.id),
+                        ("author_id", "=", ai_user.partner_id.id),
+                        ("body", "=", body),
+                        ("date", ">=", fields.Datetime.to_string(since)),
+                    ],
+                    limit=1,
+                )
+            )
+            if already_answered:
+                return
+        self.sudo().with_user(ai_user).with_context(
+            mail_create_nosubscribe=True, mail_notrack=True
+        ).message_post(
+            body=body,
+            message_type="comment",
+            subtype_xmlid="mail.mt_comment",
+        )
+
     def message_post(self, **kwargs):
         """Override to queue messages for Hermes when a gateway is configured."""
         message = super().message_post(**kwargs)
@@ -106,19 +151,34 @@ class DiscussChannel(models.Model):
         if not self._should_queue_for_hermes(message, gateway):
             return message
 
+        user = self._get_message_user(message)
+        if not gateway._is_user_allowed(user):
+            self._post_hermes_access_denied(gateway)
+            return message
+
         # Queue the message for Hermes
-        self.env["hermes.message.queue"].sudo().create(
-            {
-                "channel_id": self.id,
-                "body": message.body,
-                "author_id": message.author_id.id,
-                "gateway_id": gateway.id,
-                "db_hash": self._get_db_hash(),
-            }
+        queued = (
+            self.env["hermes.message.queue"]
+            .sudo()
+            .create(
+                {
+                    "channel_id": self.id,
+                    "body": message.body,
+                    "author_id": message.author_id.id,
+                    "gateway_id": gateway.id,
+                    "user_id": user.id,
+                    "user_has_api_key": bool(user.sudo().hermes_has_api_key),
+                    "session_key": gateway._get_session_key(user=user, channel=self),
+                    "company_id": self.env.company.id,
+                    "db_hash": self._get_db_hash(),
+                    "delivery_id": str(uuid.uuid4()),
+                }
+            )
         )
+        queued._schedule_push()
 
         # Trigger typing indicator on the AI user
-        for member in self.channel_member_ids:
+        for member in self.sudo().channel_member_ids:
             if member.partner_id == gateway.ai_user_id.partner_id:
                 member._notify_typing(is_typing=True)
 

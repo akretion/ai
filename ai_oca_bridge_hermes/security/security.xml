@@ -2,11 +2,35 @@
 <!-- Copyright 2026-TODAY Akretion - Raphael Valyi <raphael.valyi@akretion.com>
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
 <odoo>
+    <record id="group_hermes_user" model="res.groups">
+        <field name="name">Use Hermes AI</field>
+        <field name="category_id" ref="base.module_category_productivity" />
+        <field name="comment">
+            Members of this group may chat with the Hermes AI assistant in
+            Discuss. Users outside the group receive a standard refusal answer.
+        </field>
+    </record>
+
     <record id="hermes_gateway_rule_multi_company" model="ir.rule">
         <field name="name">Hermes Gateway multi-company</field>
         <field name="model_id" ref="model_hermes_gateway" />
         <field
             name="domain_force"
         >['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+    </record>
+
+    <record id="hermes_message_queue_rule_multi_company" model="ir.rule">
+        <field name="name">Hermes message queue multi-company</field>
+        <field name="model_id" ref="model_hermes_message_queue" />
+        <field
+            name="domain_force"
+        >['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+    </record>
+
+    <record id="hermes_message_queue_rule_own" model="ir.rule">
+        <field name="name">Hermes message queue: own messages</field>
+        <field name="model_id" ref="model_hermes_message_queue" />
+        <field name="groups" eval="[(4, ref('group_hermes_user'))]" />
+        <field name="domain_force">[('user_id', '=', user.id)]</field>
     </record>
 </odoo>

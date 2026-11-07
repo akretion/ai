@@ -56,6 +56,46 @@
                         </group>
                         <group string="Security">
                             <field name="webhook_token" password="True" />
+                            <field name="webhook_token_previous" password="True" />
+                            <field name="token_rotated_at" />
+                            <field name="token_grace_minutes" />
+                        </group>
+                    </group>
+                    <group string="Tenant">
+                        <group>
+                            <field name="tenant_key" />
+                            <field name="environment" />
+                            <field name="session_scope" />
+                        </group>
+                        <group string="Access">
+                            <field
+                                name="allowed_group_ids"
+                                widget="many2many_tags"
+                                options="{'no_create': True}"
+                            />
+                            <field name="require_api_key_for_tools" />
+                            <field name="denial_cooldown_minutes" />
+                        </group>
+                    </group>
+                    <group string="Realtime push">
+                        <field name="push_enabled" />
+                        <field name="push_url" />
+                        <field name="push_secret" password="True" />
+                        <field name="last_push" />
+                        <field
+                            name="access_denied_message"
+                            colspan="2"
+                            placeholder="Standard answer sent to users outside the allowed groups."
+                        />
+                    </group>
+                    <group string="Delivery">
+                        <group>
+                            <field name="max_batch_size" />
+                            <field name="long_poll_timeout" />
+                        </group>
+                        <group>
+                            <field name="claim_ttl_minutes" />
+                            <field name="max_attempts" />
                         </group>
                     </group>
                     <group string="Channels">
@@ -70,7 +110,11 @@
                     </group>
                     <group string="Statistics">
                         <field name="last_poll" />
+                        <field name="last_push" />
+                        <field name="pending_count" />
                         <field name="message_count" />
+                        <field name="last_error" />
+                        <field name="last_error_date" />
                     </group>
                 </sheet>
                 <div class="oe_chatter">
