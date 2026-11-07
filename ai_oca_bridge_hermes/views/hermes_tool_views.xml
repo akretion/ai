@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2026-TODAY Akretion - Raphael Valyi <raphael.valyi@akretion.com>
+     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
+<odoo>
+    <record id="hermes_tool_view_list" model="ir.ui.view">
+        <field name="model">hermes.tool</field>
+        <field name="arch" type="xml">
+            <list string="Hermes tools" editable="bottom">
+                <field name="sequence" widget="handle" />
+                <field name="name" />
+                <field name="description" />
+                <field name="model_name" />
+                <field name="method" />
+                <field name="allowed_group_ids" widget="many2many_tags" />
+                <field name="max_limit" />
+                <field name="active" />
+            </list>
+        </field>
+    </record>
+    <record id="hermes_tool_view_form" model="ir.ui.view">
+        <field name="model">hermes.tool</field>
+        <field name="arch" type="xml">
+            <form string="Hermes tool">
+                <sheet>
+                    <group>
+                        <field name="name" />
+                        <field name="description" />
+                        <field name="model_name" />
+                        <field name="method" />
+                        <field name="max_limit" />
+                        <field name="active" />
+                    </group>
+                    <group string="Access">
+                        <field name="allowed_group_ids" widget="many2many_tags" />
+                    </group>
+                    <group string="Fields">
+                        <field name="field_names" />
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="hermes_tool_action" model="ir.actions.act_window">
+        <field name="name">Tools</field>
+        <field name="res_model">hermes.tool</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Add the first tool the assistant may use
+            </p>
+            <p>
+                A tool opens one model, with one read method, to the users in
+                the groups you choose.
+            </p>
+        </field>
+    </record>
+    <menuitem
+        id="menu_hermes_tool"
+        name="Tools"
+        parent="menu_hermes_root"
+        action="hermes_tool_action"
+        sequence="20"
+    />
+</odoo>

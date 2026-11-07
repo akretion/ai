@@ -7,7 +7,7 @@
         Integrate Hermes AI Agent as a native chatbot inside Odoo Discuss.
         Requires a running Hermes gateway with the Odoo platform adapter.
     """,
-    "version": "18.0.1.3.0",
+    "version": "18.0.1.4.0",
     "license": "AGPL-3",
     "author": "Akretion,Odoo Community Association (OCA)",
     "website": "https://github.com/OCA/ai",
@@ -22,8 +22,10 @@
         "views/hermes_gateway_views.xml",
         "views/discuss_channel_views.xml",
         "views/menu.xml",
+        "views/hermes_tool_views.xml",
         "views/res_users.xml",
         "data/ir_cron.xml",
+        "data/hermes_tool_data.xml",
     ],
     "demo": [],
     "installable": True,

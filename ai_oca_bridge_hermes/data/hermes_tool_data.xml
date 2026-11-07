@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2026-TODAY Akretion - Raphael Valyi <raphael.valyi@akretion.com>
+     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
+<odoo noupdate="1">
+    <!-- Conservative defaults: every internal user, read only. Customers add
+         their own tools for their power users. -->
+    <record id="tool_partners" model="hermes.tool">
+        <field name="sequence">10</field>
+        <field name="name">partners</field>
+        <field name="description">Search partners: contacts and companies</field>
+        <field name="model_name">res.partner</field>
+        <field name="method">search_read</field>
+        <field name="allowed_group_ids" eval="[(6, 0, [ref('base.group_user')])]" />
+        <field name="max_limit">40</field>
+    </record>
+    <record id="tool_products" model="hermes.tool">
+        <field name="sequence">20</field>
+        <field name="name">products</field>
+        <field name="description">Search products and their sale price</field>
+        <field name="model_name">product.template</field>
+        <field name="method">search_read</field>
+        <field name="allowed_group_ids" eval="[(6, 0, [ref('base.group_user')])]" />
+        <field name="max_limit">40</field>
+    </record>
+</odoo>

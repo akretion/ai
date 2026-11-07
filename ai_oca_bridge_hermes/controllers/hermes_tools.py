@@ -93,6 +93,83 @@ class HermesToolsController(http.Controller):
         tools = self._get_available_tools(request.env)
         return {"tools": tools}
 
+    @http.route(
+        "/hermes/tools/available",
+        type="json",
+        auth="public",
+        methods=["POST"],
+        csrf=False,
+    )
+    def hermes_tools_available(self, **kwargs):
+        """Tools opened to one user, from the Odoo-side whitelist."""
+        gateway = self._get_gateway()
+        if not gateway:
+            return {"status": "error", "error": "invalid_token"}
+        data = request.get_json_data() or {}
+        user = self._get_user(data.get("user_id"))
+        if isinstance(user, dict):
+            return user
+        if not gateway._is_user_allowed(user):
+            return {"status": "error", "error": "user_not_allowed"}
+        tools = request.env["hermes.tool"].sudo()._for_user(user)
+        return {
+            "status": "ok",
+            "tools": [tool._as_tool_dict() for tool in tools],
+        }
+
+    @http.route(
+        "/hermes/tools/resolve",
+        type="json",
+        auth="public",
+        methods=["POST"],
+        csrf=False,
+    )
+    def hermes_tools_resolve(self, **kwargs):
+        """May this user use this tool, and with which limits?
+
+        The gateway checks every call here before running the query with the
+        user's own API key, so a stale cache or a prompt injection cannot widen
+        what the whitelist allows.
+        """
+        gateway = self._get_gateway()
+        if not gateway:
+            return {"status": "error", "error": "invalid_token"}
+        data = request.get_json_data() or {}
+        user = self._get_user(data.get("user_id"))
+        if isinstance(user, dict):
+            return user
+        if not gateway._is_user_allowed(user):
+            return {"status": "error", "error": "user_not_allowed"}
+        tools = request.env["hermes.tool"].sudo()
+        if data.get("tool"):
+            tool = tools._resolve_for_user(user, (data.get("tool") or "").strip())
+        else:
+            tool = tools._resolve_for_user_model(
+                user,
+                (data.get("model") or "").strip(),
+                (data.get("method") or "search_read").strip(),
+            )
+        if not tool:
+            return {"status": "error", "error": "tool_not_allowed"}
+        return {"status": "ok", "tool": tool}
+
+    def _get_gateway(self):
+        auth_header = request.httprequest.headers.get("Authorization", "")
+        token = auth_header.replace("Bearer ", "").strip() if auth_header else ""
+        if not token:
+            return None
+        return request.env["hermes.gateway"].sudo()._find_by_token(token)
+
+    def _get_user(self, user_id):
+        try:
+            user_id = int(user_id)
+        except (TypeError, ValueError):
+            return {"status": "error", "error": "unknown_user"}
+        user = request.env["res.users"].sudo().browse(user_id).exists()
+        if not user or not user.active:
+            return {"status": "error", "error": "unknown_user"}
+        return user
+
     def _get_available_tools(self, env):
         """Return list of available tool definitions.
 
