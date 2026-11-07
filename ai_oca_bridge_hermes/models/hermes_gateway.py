@@ -149,6 +149,14 @@ class HermesGateway(models.Model):
         help="Minimum delay between two access-denied answers in the same "
         "channel, to avoid flooding it.",
     )
+    allow_user_connect = fields.Boolean(
+        help="Let users hand their own Odoo API key over to the gateway, so the "
+        "assistant can read Odoo with their own access rights.",
+    )
+    credential_ttl_days = fields.Integer(
+        default=30,
+        help="Validity of the API key a user hands over from their preferences.",
+    )
     require_api_key_for_tools = fields.Boolean(
         default=True,
         help="Only tell the gateway that it may call Odoo on behalf of a user "

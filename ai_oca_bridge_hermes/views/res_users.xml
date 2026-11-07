@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2026-TODAY Akretion - Raphael Valyi <raphael.valyi@akretion.com>
+     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
+<odoo>
+    <record id="view_users_form_hermes" model="ir.ui.view">
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Hermes AI" name="hermes_ai">
+                    <group>
+                        <field name="hermes_has_api_key" string="Connected" />
+                        <field name="hermes_credential_expiry" />
+                    </group>
+                    <div class="text-muted">
+                        Connecting hands a dedicated Odoo API key over to the
+                        Hermes assistant. The assistant then reads records with
+                        <b>your own</b> access rights and record rules; revoking
+                        the connection invalidates the key immediately.
+                    </div>
+                    <div class="mt-3">
+                        <button
+                            name="action_hermes_connect"
+                            type="object"
+                            string="Connect the assistant"
+                            class="btn-primary"
+                            invisible="hermes_has_api_key"
+                        />
+                        <button
+                            name="action_hermes_disconnect"
+                            type="object"
+                            string="Disconnect"
+                            class="btn-secondary"
+                            invisible="not hermes_has_api_key"
+                            confirm="The assistant will lose access to your Odoo records."
+                        />
+                    </div>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>
