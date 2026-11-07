@@ -655,6 +655,19 @@ message becomes <tt class="docutils literal">dead</tt>.</td>
 <tt class="docutils literal">/hermes/poll</tt>. 0 disables
 it.</td>
 </tr>
+<tr><td>Allow users to connect</td>
+<td>off</td>
+<td>Show the <strong>Connect Hermes</strong>
+button in the users’
+preferences.</td>
+</tr>
+<tr><td>Credential validity
+(days)</td>
+<td>30</td>
+<td>Lifetime of the API key
+created by <strong>Connect
+Hermes</strong>.</td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -803,6 +816,29 @@ the status must be read from the body.</p>
 safe. A reply closes exactly its <tt class="docutils literal">queue_id</tt>, so two conversations in
 flight in one channel cannot swallow each other.</p>
 </div>
+<div class="section" id="letting-the-assistant-read-odoo-as-the-user">
+<h2>Letting the assistant read Odoo as the user</h2>
+<p>A user can hand their own API key to the assistant, so answers can be
+based on records <strong>that user</strong> is allowed to see:</p>
+<ol class="arabic simple">
+<li>The administrator enables <strong>Allow users to connect</strong> on the gateway.</li>
+<li>The user opens <strong>Preferences → Hermes AI</strong> and clicks <strong>Connect
+Hermes</strong>. Odoo creates an API key in that user’s own name (scope
+<tt class="docutils literal">rpc</tt>) and leaves it in a one-shot hand-off for the gateway.</li>
+<li>The gateway collects it on <tt class="docutils literal">/hermes/credentials</tt>, stores it
+encrypted on its side, checks it with a real RPC call, and wipes the
+plaintext in Odoo.</li>
+<li><strong>Disconnect</strong> revokes the key immediately; otherwise it expires
+after <em>Credential validity (days)</em>.</li>
+</ol>
+<p>Nothing is typed by hand and nothing appears in the chat. Because the
+key is the user’s own, the assistant inherits exactly that user’s access
+rights and record rules: it cannot read what the user cannot read, and
+the key can be revoked from the same screen.</p>
+<p>Note: Odoo stores API keys hashed, so a key cannot be read back later.
+The hand-off is therefore one-shot: if the gateway loses it, the user
+reconnects.</p>
+</div>
 <div class="section" id="troubleshooting">
 <h2>Troubleshooting</h2>
 <ul class="simple">
@@ -817,6 +853,10 @@ the secret does not match the one in Odoo.</li>
 <div class="section" id="known-issues-roadmap">
 <h3>Known issues / Roadmap</h3>
 <ul class="simple">
+<li>Tool exposure: let the model call whitelisted Odoo methods
+(<tt class="docutils literal">search_read</tt>, <tt class="docutils literal">read</tt>, <tt class="docutils literal">fields_get</tt>) instead of the gateway
+pre-fetching everything; the whitelist should live in Odoo and be
+enumerable by the agent</li>
 <li>Multi-tenant routing: a shared Hermes instance serving several Odoo
 databases, one profile per tenant</li>
 <li>Per-tenant quotas and usage metering (in a child module or the

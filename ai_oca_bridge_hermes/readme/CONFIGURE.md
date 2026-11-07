@@ -17,6 +17,8 @@
 | Claim TTL (minutes) | 5 | Delay before an unanswered message is handed back to the queue. |
 | Max attempts | 5 | Delivery attempts before the message becomes `dead`. |
 | Long poll timeout | 0 | Up to 20 s of long polling on `/hermes/poll`. 0 disables it. |
+| Allow users to connect | off | Show the **Connect Hermes** button in the users' preferences. |
+| Credential validity (days) | 30 | Lifetime of the API key created by **Connect Hermes**. |
 
 ## Recommended presets
 

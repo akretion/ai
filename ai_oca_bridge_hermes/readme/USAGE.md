@@ -105,6 +105,28 @@ A repeated `delivery_id` is answered with `{"status": "ok", "duplicate": true}`
 and posts nothing: retries are safe. A reply closes exactly its `queue_id`, so
 two conversations in flight in one channel cannot swallow each other.
 
+## Letting the assistant read Odoo as the user
+
+A user can hand their own API key to the assistant, so answers can be based on
+records **that user** is allowed to see:
+
+1. The administrator enables **Allow users to connect** on the gateway.
+2. The user opens **Preferences → Hermes AI** and clicks **Connect Hermes**.
+   Odoo creates an API key in that user's own name (scope `rpc`) and leaves it in
+   a one-shot hand-off for the gateway.
+3. The gateway collects it on `/hermes/credentials`, stores it encrypted on its
+   side, checks it with a real RPC call, and wipes the plaintext in Odoo.
+4. **Disconnect** revokes the key immediately; otherwise it expires after
+   *Credential validity (days)*.
+
+Nothing is typed by hand and nothing appears in the chat. Because the key is the
+user's own, the assistant inherits exactly that user's access rights and record
+rules: it cannot read what the user cannot read, and the key can be revoked from
+the same screen.
+
+Note: Odoo stores API keys hashed, so a key cannot be read back later. The
+hand-off is therefore one-shot: if the gateway loses it, the user reconnects.
+
 ## Troubleshooting
 
 - *Queue rows stay pending*: the gateway is not polling and push is disabled or

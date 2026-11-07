@@ -288,6 +288,14 @@ Gateway settings
 |                         |                 | ``/hermes/poll``. 0 disables  |
 |                         |                 | it.                           |
 +-------------------------+-----------------+-------------------------------+
+| Allow users to connect  | off             | Show the **Connect Hermes**   |
+|                         |                 | button in the users'          |
+|                         |                 | preferences.                  |
++-------------------------+-----------------+-------------------------------+
+| Credential validity     | 30              | Lifetime of the API key       |
+| (days)                  |                 | created by **Connect          |
+|                         |                 | Hermes**.                     |
++-------------------------+-----------------+-------------------------------+
 
 Recommended presets
 -------------------
@@ -427,6 +435,31 @@ A repeated ``delivery_id`` is answered with
 safe. A reply closes exactly its ``queue_id``, so two conversations in
 flight in one channel cannot swallow each other.
 
+Letting the assistant read Odoo as the user
+-------------------------------------------
+
+A user can hand their own API key to the assistant, so answers can be
+based on records **that user** is allowed to see:
+
+1. The administrator enables **Allow users to connect** on the gateway.
+2. The user opens **Preferences → Hermes AI** and clicks **Connect
+   Hermes**. Odoo creates an API key in that user's own name (scope
+   ``rpc``) and leaves it in a one-shot hand-off for the gateway.
+3. The gateway collects it on ``/hermes/credentials``, stores it
+   encrypted on its side, checks it with a real RPC call, and wipes the
+   plaintext in Odoo.
+4. **Disconnect** revokes the key immediately; otherwise it expires
+   after *Credential validity (days)*.
+
+Nothing is typed by hand and nothing appears in the chat. Because the
+key is the user's own, the assistant inherits exactly that user's access
+rights and record rules: it cannot read what the user cannot read, and
+the key can be revoked from the same screen.
+
+Note: Odoo stores API keys hashed, so a key cannot be read back later.
+The hand-off is therefore one-shot: if the gateway loses it, the user
+reconnects.
+
 Troubleshooting
 ---------------
 
@@ -441,6 +474,10 @@ Troubleshooting
 Known issues / Roadmap
 ======================
 
+- Tool exposure: let the model call whitelisted Odoo methods
+  (``search_read``, ``read``, ``fields_get``) instead of the gateway
+  pre-fetching everything; the whitelist should live in Odoo and be
+  enumerable by the agent
 - Multi-tenant routing: a shared Hermes instance serving several Odoo
   databases, one profile per tenant
 - Per-tenant quotas and usage metering (in a child module or the
