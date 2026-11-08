@@ -1,7 +1,8 @@
 /** @odoo-module **/
 
-import { registry } from "@web/core/registry";
-import { rpc } from "@web/core/network/rpc";
+import {registry} from "@web/core/registry";
+import {rpc} from "@web/core/network/rpc";
+import {user} from "@web/core/user";
 
 /**
  * Report the page the user is browsing, so the assistant can answer "this
@@ -23,7 +24,7 @@ async function reportCurrentPage() {
     }
     lastReportedHref = href;
     try {
-        await rpc(ENDPOINT, { url: href, action_name: document.title });
+        await rpc(ENDPOINT, {url: href, action_name: document.title});
     } catch {
         // Never disturb the user: retry on the next tick.
         lastReportedHref = null;
@@ -31,7 +32,19 @@ async function reportCurrentPage() {
 }
 
 export const agentContextService = {
-    start() {
+    async start() {
+        // Nothing leaves the browser for users who cannot use the assistant.
+        let allowed = false;
+        try {
+            allowed =
+                (await user.hasGroup("ai_oca_bridge_agent.group_agent_user")) ||
+                (await user.hasGroup("base.group_system"));
+        } catch {
+            allowed = false;
+        }
+        if (!allowed) {
+            return;
+        }
         reportCurrentPage();
         window.setInterval(reportCurrentPage, REPORT_INTERVAL_MS);
     },

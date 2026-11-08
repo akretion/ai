@@ -16,8 +16,16 @@ class AgentContextController(http.Controller):
         csrf=False,
     )
     def report_web_context(self, **kwargs):
+        user = request.env.user
+        # Only users who may talk to the assistant are tracked at all: no
+        # browsing data is collected for the rest of the company.
+        if not (
+            user.has_group("ai_oca_bridge_agent.group_agent_user")
+            or user.has_group("base.group_system")
+        ):
+            return {"status": "ignored"}
         data = request.get_json_data() or {}
-        context = request.env["ai.bridge.user.context"]._record(request.env.user, data)
+        context = request.env["ai.bridge.user.context"]._record(user, data)
         return {
             "status": "ok",
             "model": context.model_name,
