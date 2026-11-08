@@ -68,6 +68,18 @@ class AiBridgeAgentMessage(models.Model):
     tokens_in = fields.Integer(default=0, readonly=True)
     tokens_out = fields.Integer(default=0, readonly=True)
     agent_id = fields.Many2one("ai.bridge.agent", required=True, index=True)
+    mail_message_id = fields.Many2one(
+        "mail.message",
+        help="Message this row was queued from.",
+    )
+    attachment_ids = fields.Many2many(
+        "ir.attachment",
+        "ai_bridge_agent_message_attachment_rel",
+        "message_id",
+        "attachment_id",
+        string="Attachments",
+        help="Files the user sent with the message.",
+    )
     db_hash = fields.Char(help="Database hash for AI agent session key.")
     error_message = fields.Text()
     message_type = fields.Selection(
@@ -91,6 +103,25 @@ class AiBridgeAgentMessage(models.Model):
     def _compute_body_text(self):
         for message in self:
             message.body_text = html2plaintext(message.body or "")
+
+    def _get_attachments_payload(self):
+        """Describe the attached files, with a token-authenticated URL."""
+        self.ensure_one()
+        payload = []
+        for attachment in self.attachment_ids:
+            payload.append(
+                {
+                    "id": attachment.id,
+                    "name": attachment.name,
+                    "mimetype": attachment.mimetype or "application/octet-stream",
+                    "size": attachment.file_size or 0,
+                    "url": (
+                        f"/ai_agent/attachment/{self.agent_id.webhook_token}"
+                        f"/{attachment.id}"
+                    ),
+                }
+            )
+        return payload
 
     def _get_history(self, limit=20):
         """Return the recent conversation of the channel, oldest first."""

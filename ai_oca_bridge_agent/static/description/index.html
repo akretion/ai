@@ -976,6 +976,26 @@ model without ever seeing the API key.</li>
 <tt class="docutils literal">agent_key</tt> on every message, so one responder can serve several
 agents with different roles.</p>
 </div>
+<div class="section" id="files-the-user-sends">
+<h2>Files the user sends</h2>
+<p>A message may carry attachments. Each queued message remembers them
+(<tt class="docutils literal">ai_bridge_agent_message_attachment_rel</tt>) and the payload lists them
+with a token-authenticated URL:</p>
+<pre class="code json literal-block">
+<span class="nt">&quot;attachments&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;screen.png&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;mimetype&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;image/png&quot;</span><span class="p">,</span><span class="w">
+                 </span><span class="nt">&quot;size&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">81234</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/ai_agent/attachment/&lt;token&gt;/42&quot;</span><span class="p">}]</span>
+</pre>
+<p>The download endpoint only serves files that were queued for <strong>that</strong>
+agent, so a leaked URL is useless to another tenant.
+<tt class="docutils literal">POST <span class="pre">/ai_agent/webhook/&lt;token&gt;</span></tt> accepts the reverse direction
+(<tt class="docutils literal">attachments</tt> with base64), which is how the assistant sends files
+back.</p>
+<p>The reference responder writes the incoming files under its inbox, tells
+the model where they are (with a text preview for text-like files), and
+deletes them once the answer is posted. Reading an image also needs a
+vision-capable auxiliary model configured on the responder; without one
+the assistant knows a file arrived but cannot describe it.</p>
+</div>
 <div class="section" id="rendering-and-attachments">
 <h2>Rendering and attachments</h2>
 <p>The reply payload tells Odoo how to read the answer, so the assistant is

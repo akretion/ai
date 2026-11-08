@@ -172,6 +172,8 @@ class DiscussChannel(models.Model):
                     "company_id": self.env.company.id,
                     "db_hash": self._get_db_hash(),
                     "delivery_id": str(uuid.uuid4()),
+                    "mail_message_id": message.id,
+                    "attachment_ids": [(6, 0, message.attachment_ids.ids)],
                 }
             )
         )

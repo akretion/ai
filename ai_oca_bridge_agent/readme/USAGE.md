@@ -197,6 +197,28 @@ All of it travels in the poll response under `agent`, plus the stable
 `agent_key` on every message, so one responder can serve several agents with
 different roles.
 
+## Files the user sends
+
+A message may carry attachments. Each queued message remembers them
+(`ai_bridge_agent_message_attachment_rel`) and the payload lists them with a
+token-authenticated URL:
+
+```json
+"attachments": [{"id": 42, "name": "screen.png", "mimetype": "image/png",
+                 "size": 81234, "url": "/ai_agent/attachment/<token>/42"}]
+```
+
+The download endpoint only serves files that were queued for **that** agent, so
+a leaked URL is useless to another tenant. `POST /ai_agent/webhook/<token>`
+accepts the reverse direction (`attachments` with base64), which is how the
+assistant sends files back.
+
+The reference responder writes the incoming files under its inbox, tells the
+model where they are (with a text preview for text-like files), and deletes
+them once the answer is posted. Reading an image also needs a vision-capable
+auxiliary model configured on the responder; without one the assistant knows a
+file arrived but cannot describe it.
+
 ## Rendering and attachments
 
 The reply payload tells Odoo how to read the answer, so the assistant is not

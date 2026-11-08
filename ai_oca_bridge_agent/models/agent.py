@@ -430,6 +430,7 @@ class AiBridgeAgent(models.Model):
             "agent_id": self.id,
             "agent_key": self.agent_key,
             "agent": self._get_agent_definition(),
+            "attachments": message._get_attachments_payload(),
             "view_context": self.env["ai.bridge.user.context"]
             .sudo()
             ._get_for_user(message.user_id),
