@@ -6,21 +6,21 @@ from datetime import timedelta
 from odoo import api, fields, models
 
 
-class HermesCredential(models.Model):
-    """Short-lived hand-off of a user API key to the gateway.
+class AiBridgeAgentCredential(models.Model):
+    """Short-lived hand-off of a user API key to the agent.
 
     Odoo cannot read an API key back (it stores a hash), so the only moment the
     plaintext exists is its creation. The user generates it from their own
-    preferences; the row keeps it for a few minutes until the gateway collects
+    preferences; the row keeps it for a few minutes until the agent collects
     it, then the plaintext is wiped.
     """
 
-    _name = "hermes.credential"
-    _description = "Hermes User Credential Hand-off"
+    _name = "ai.bridge.agent.credential"
+    _description = "AI agent User Credential Hand-off"
     _order = "id desc"
 
-    gateway_id = fields.Many2one(
-        "hermes.gateway", required=True, ondelete="cascade", index=True
+    agent_id = fields.Many2one(
+        "ai.bridge.agent", required=True, ondelete="cascade", index=True
     )
     user_id = fields.Many2one(
         "res.users", required=True, ondelete="cascade", index=True
@@ -42,19 +42,19 @@ class HermesCredential(models.Model):
     delivered_at = fields.Datetime(readonly=True)
 
     @api.model
-    def _fetch_pending(self, gateway):
-        """Return and burn the credentials waiting for this gateway."""
+    def _fetch_pending(self, agent):
+        """Return and burn the credentials waiting for this agent."""
         now = fields.Datetime.now()
         self.search(
             [
-                ("gateway_id", "=", gateway.id),
+                ("agent_id", "=", agent.id),
                 ("state", "=", "pending"),
                 ("expires_at", "<=", now),
             ]
         ).write({"state": "expired", "api_key": False})
         pending = self.search(
             [
-                ("gateway_id", "=", gateway.id),
+                ("agent_id", "=", agent.id),
                 ("state", "=", "pending"),
                 ("expires_at", ">", now),
             ],
@@ -76,7 +76,7 @@ class HermesCredential(models.Model):
                 {
                     "state": "delivered",
                     "delivered_at": now,
-                    # the gateway owns the secret from now on
+                    # the agent owns the secret from now on
                     "api_key": False,
                 }
             )
@@ -91,12 +91,12 @@ class HermesCredential(models.Model):
         )
 
     @api.model
-    def _create_handoff(self, gateway, user, api_key, key_id, ttl_minutes=10):
+    def _create_handoff(self, agent, user, api_key, key_id, ttl_minutes=10):
         return self.create(
             {
-                "gateway_id": gateway.id,
+                "agent_id": agent.id,
                 "user_id": user.id,
-                "session_key": gateway._get_session_key(user=user),
+                "session_key": agent._get_session_key(user=user),
                 "api_key": api_key,
                 "key_id": key_id,
                 "expires_at": fields.Datetime.now() + timedelta(minutes=ttl_minutes),

@@ -5,21 +5,23 @@ from odoo import http
 from odoo.http import request
 
 
-class HermesCredentials(http.Controller):
-    """Hand-off of user API keys to the gateway.
+class AgentCredentials(http.Controller):
+    """Hand-off of user API keys to the agent.
 
     Odoo cannot read an API key back, so the plaintext exists only at creation
     time: the user triggers it from their preferences, it waits here for a few
-    minutes, and the gateway collects it with its own token. The row keeps the
+    minutes, and the agent collects it with its own token. The row keeps the
     secret only until the collection, then wipes it.
     """
 
-    @http.route("/hermes/credentials", type="json", auth="public", csrf=False)
+    @http.route("/ai_agent/credentials", type="json", auth="public", csrf=False)
     def fetch_credentials(self, **kwargs):
         auth_header = request.httprequest.headers.get("Authorization", "")
         token = auth_header.replace("Bearer ", "").strip() if auth_header else ""
-        gateway = request.env["hermes.gateway"].sudo()._find_by_token(token)
-        if not gateway:
+        agent = request.env["ai.bridge.agent"].sudo()._find_by_token(token)
+        if not agent:
             return {"status": "error", "error": "invalid_token", "credentials": []}
-        credentials = request.env["hermes.credential"].sudo()._fetch_pending(gateway)
+        credentials = (
+            request.env["ai.bridge.agent.credential"].sudo()._fetch_pending(agent)
+        )
         return {"status": "ok", "credentials": credentials}

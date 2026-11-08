@@ -63,7 +63,7 @@ The module exposes two transports for the same conversation:
 - **Push (recommended)**: Odoo signs an event with an HMAC secret and
   posts it to the responder the moment a message is committed. Latency
   is one HTTP call, and no Odoo worker is ever held waiting.
-- **Polling (fallback)**: the responder calls ``/hermes/poll`` and
+- **Polling (fallback)**: the responder calls ``/ai_agent/poll`` and
   *claims* the pending messages atomically. Works through any firewall,
   no inbound route needed on the Odoo side, but costs one request per
   interval per tenant.
@@ -91,7 +91,7 @@ One responder installation can serve many Odoo databases:
 Who may talk to the assistant
 -----------------------------
 
-Access is a group (``Use the AI assistant``), configurable per gateway.
+Access is a group (``Use the AI assistant``), configurable per agent.
 System administrators always keep access so a fresh install stays
 configurable. Someone outside the allowed groups who addresses the
 assistant receives a configurable standard answer, posted at most once
@@ -159,39 +159,39 @@ Architecture Rationale
 Polling was the original design: it works behind firewalls and needs no
 inbound route on the Odoo side. It stays as the **fallback**, but it
 does not scale to many tenants (one request per interval per tenant, a
-delayed answer, and a gateway that has to hold the conversation state
+delayed answer, and a agent that has to hold the conversation state
 between two polls).
 
 The recommended transport is **outbound push**: Odoo signs the event and
 posts it as soon as the transaction is committed (``cr.postcommit``), so
-the gateway never sees a message the database could still roll back. A
+the agent never sees a message the database could still roll back. A
 one-minute cron pushes whatever the post-commit hook could not send,
-which makes a gateway restart or a network glitch invisible to the user.
+which makes a agent restart or a network glitch invisible to the user.
 
 Both transports carry the same JSON envelope (see ``USAGE.md``), so the
-gateway only has to implement one parser.
+agent only has to implement one parser.
 
-**Stateless gateway, persistent session per user**
+**Stateless agent, persistent session per user**
 
-The gateway keeps **no** conversation state in Odoo: it authenticates
-with a tenant key, reads the session key from the envelope, and answers
-with a ``delivery_id``. The Hermes session itself is persistent
+The agent keeps **no** conversation state in Odoo: it authenticates with
+a tenant key, reads the session key from the envelope, and answers with
+a ``delivery_id``. The Hermes session itself is persistent
 (``session_scope``: per user by default, per channel optionally), which
 is what gives the assistant a memory across messages without storing a
 transcript in Odoo.
 
 **Atomic claiming**
 
-``/hermes/poll`` claims messages with a single
+``/ai_agent/poll`` claims messages with a single
 ``UPDATE ... FOR UPDATE SKIP LOCKED ... RETURNING``. This is what makes
-several gateway workers and several Odoo HTTP workers safe together, and
-it removes the previous per-gateway one-second throttle that capped
-every tenant of a database.
+several agent workers and several Odoo HTTP workers safe together, and
+it removes the previous per-agent one-second throttle that capped every
+tenant of a database.
 
-**Standalone gateway**
+**Standalone agent**
 
-``scripts/hermes_odoo_gateway.py`` polls in echo mode or with a Hermes
-AIAgent. ``scripts/hermes_push_server.py`` is the reference push
+``scripts/agent_gateway_example.py`` polls in echo mode or with a Hermes
+AIAgent. ``scripts/ai_agent_push_server.py`` is the reference push
 receiver: it verifies the HMAC signature, answers, and is the place to
 plug the agent call. Neither needs to run inside Odoo's Python
 environment.
@@ -201,19 +201,19 @@ environment.
 The module is intentionally minimal. Child modules can extend, without
 forking:
 
-- ``hermes.gateway._is_user_allowed(user)`` — who may talk to the
+- ``ai.bridge.agent._is_user_allowed(user)`` — who may talk to the
   assistant;
-- ``hermes.gateway._get_capabilities(message)`` — what the gateway may
-  do for that user (``full``/``basic``, ``odoo_rpc``, tool list);
-- ``hermes.gateway._build_event_payload(message)`` — enrich the envelope
-  with business context;
-- ``hermes.gateway._get_session_key(user, channel)`` — session
+- ``ai.bridge.agent._get_capabilities(message)`` — what the agent may do
+  for that user (``full``/``basic``, ``odoo_rpc``, tool list);
+- ``ai.bridge.agent._build_event_payload(message)`` — enrich the
+  envelope with business context;
+- ``ai.bridge.agent._get_session_key(user, channel)`` — session
   granularity;
-- ``hermes.message.queue._get_history(limit)`` — what the assistant sees
-  of the conversation;
-- ``discuss.channel._should_queue_for_hermes(message, gateway)`` —
-  routing rules;
-- ``hermes_webhook._action_escalate(gateway, data)`` — escalation
+- ``ai.bridge.agent.message._get_history(limit)`` — what the assistant
+  sees of the conversation;
+- ``discuss.channel._should_queue_for_agent(message, agent)`` — routing
+  rules;
+- ``ai_agent_webhook._action_escalate(agent, data)`` — escalation
   backend.
 
 **The AGPL boundary (read this before adding private logic)**
@@ -226,7 +226,7 @@ the private value of the product must **not** live in an Odoo module:
 - keep in Odoo only the transport, the traceability and the coarse
   access policy that you are happy to publish;
 - keep prompts, skills, tool whitelists, model/provider choice, tenant
-  registry, quotas, billing and routing intelligence in the **gateway
+  registry, quotas, billing and routing intelligence in the **agent
   process**, which talks to Odoo over the documented HTTP envelope;
 - if a private Odoo child module is really needed, accept that it is
   AGPL too (that is fine for internal, non-distributed deployments, but
@@ -249,17 +249,17 @@ Security Model
   endpoints authenticate with an HMAC signature over
   ``<timestamp>.<body>``;
 - AI users are regular Odoo users with limited permissions;
-- the gateway runs with its own credentials and, per user, with that
+- the agent runs with its own credentials and, per user, with that
   user's API key when there is one;
 - queue rows are protected by a multi-company rule and by an
   own-messages-only rule for non-managers;
-- the Odoo side never executes code sent by the gateway.
+- the Odoo side never executes code sent by the agent.
 
 Configuration
 =============
 
-Gateway settings
-----------------
+Agent settings
+--------------
 
 +----------------------+----------------------+-------------------------------+
 | Setting              | Default              | What it does                  |
@@ -285,8 +285,8 @@ Gateway settings
 | key for tools        |                      | for users owning an API key.  |
 +----------------------+----------------------+-------------------------------+
 | Tenant key           | generated            | Stable database identifier    |
-|                      |                      | shared by every gateway of    |
-|                      |                      | the database. Do not edit.    |
+|                      |                      | shared by every agent of the  |
+|                      |                      | database. Do not edit.        |
 +----------------------+----------------------+-------------------------------+
 | Environment          | prod                 | ``prod``/``staging``/``dev``, |
 |                      |                      | part of the Hermes session    |
@@ -320,8 +320,8 @@ Gateway settings
 |                      |                      | message becomes ``dead``.     |
 +----------------------+----------------------+-------------------------------+
 | Long poll timeout    | 0                    | Up to 20 s of long polling on |
-|                      |                      | ``/hermes/poll``. 0 disables  |
-|                      |                      | it.                           |
+|                      |                      | ``/ai_agent/poll``. 0         |
+|                      |                      | disables it.                  |
 +----------------------+----------------------+-------------------------------+
 | Allow users to       | off                  | Show the **Connect Hermes**   |
 | connect              |                      | button in the users'          |
@@ -344,9 +344,9 @@ Recommended presets
 -------------------
 
 - **Single customer, behind a firewall**: push disabled, long poll 20 s,
-  one gateway worker. Nothing has to reach Odoo from outside.
+  one agent worker. Nothing has to reach Odoo from outside.
 - **Akretion-style shared Hermes**: push enabled over HTTPS, HMAC secret
-  per tenant, ``environment`` set per database, one gateway worker per
+  per tenant, ``environment`` set per database, one agent worker per
   tenant queue.
 - **Pilot with power users only**: allowed groups = a dedicated group,
   API key required for tools, session scope per user.
@@ -360,20 +360,20 @@ Configuration
 1. Create the AI user: a regular Odoo user, member of no group of its
    own, linked to an ``ai.bridge`` with usage *Hermes* (this is what
    makes Discuss treat it as an assistant).
-2. Go to *AI Bridge > Hermes > Gateways* and create a gateway: name, AI
+2. Go to *AI Bridge > Hermes > Agents* and create a agent: name, AI
    user, environment (``prod``/``staging``/``dev``) and the groups
    allowed to chat with it. System administrators always keep access.
 3. Copy the **webhook token** for the polling transport, and the **HMAC
    secret** (``push_secret``) for the push transport. Both are shown to
    system administrators only.
-4. Optional: restrict the gateway to specific channels, otherwise every
+4. Optional: restrict the agent to specific channels, otherwise every
    channel the AI user belongs to is monitored, and group channels
    answer only when the assistant is mentioned.
 
 **Real-time push (recommended)**
 
-In the *Realtime push* section, check **Push enabled** and set the
-gateway URL, e.g. ``https://hermes.example.com/odoo/events``. Odoo then
+In the *Realtime push* section, check **Push enabled** and set the agent
+URL, e.g. ``https://responder.example.com/ai_agent/events``. Odoo then
 posts every new message after the transaction commits, signed with:
 
 ::
@@ -384,20 +384,20 @@ posts every new message after the transaction commits, signed with:
    X-Hermes-Signature: sha256=<hmac_sha256(push_secret, "<timestamp>.<raw body>")>
 
 A one-minute cron retries whatever the post-commit hook could not
-deliver, so a gateway restart does not lose a message. Leaving push
+deliver, so a agent restart does not lose a message. Leaving push
 disabled keeps the polling transport in charge.
 
 **Polling (fallback)**
 
 .. code:: bash
 
-   python scripts/hermes_odoo_gateway.py \
+   python scripts/agent_gateway_example.py \
        --odoo-url https://odoo.example.com \
        --webhook-token YOUR_TOKEN \
        --poll-interval 5
 
 Add ``--use-agent --model ... --provider ...`` to answer with a Hermes
-AIAgent instead of echo mode. Set **Long poll timeout** on the gateway
+AIAgent instead of echo mode. Set **Long poll timeout** on the agent
 (0-20 s) to hold the request until a message arrives instead of paying a
 fixed interval.
 
@@ -405,61 +405,61 @@ fixed interval.
 
 .. code:: bash
 
-   python scripts/hermes_push_server.py \
+   python scripts/ai_agent_push_server.py \
        --port 8770 \
        --odoo-url https://odoo.example.com \
        --tenant <tenant_key> \
        --secret <push_secret> \
        --mode echo
 
-It verifies the signature, answers ``/hermes/reply`` with the same HMAC
-scheme and is the place to plug the agent call (``build_answer``).
+It verifies the signature, answers ``/ai_agent/reply`` with the same
+HMAC scheme and is the place to plug the agent call (``build_answer``).
 
 Access control
 --------------
 
 Users outside the allowed groups are answered with a standard message
-(configurable per gateway, *Access denied message*), posted at most once
+(configurable per agent, *Access denied message*), posted at most once
 per ``denial_cooldown_minutes`` per channel. Administrators are always
 allowed.
 
 Two capability tiers
 --------------------
 
-The envelope announces what the gateway may do for the user:
+The envelope announces what the agent may do for the user:
 
 - ``tier: "full"``, ``odoo_rpc: true`` — the user owns an Odoo API key,
-  so the gateway can call Odoo with that user's rights (ACL and record
+  so the agent can call Odoo with that user's rights (ACL and record
   rules included);
 - ``tier: "basic"``, ``odoo_rpc: false`` — no API key: the assistant
   answers generically and does not read business data.
 
 Uncheck *Require an Odoo API key for tools* to announce
-``odoo_rpc: true`` for everyone (the gateway then uses its own service
+``odoo_rpc: true`` for everyone (the agent then uses its own service
 account, which is a deployment decision, not an Odoo one).
 
-In both cases the gateway must never receive more rights than the user:
+In both cases the agent must never receive more rights than the user:
 the API key is the user's own, and the module only reports whether it
 exists.
 
 Protocol summary
 ----------------
 
-+----------------------+-----------------------------------+-----------------------------------+
-| Direction            | Endpoint                          | Auth                              |
-+======================+===================================+===================================+
-| Odoo -> gateway      | ``POST {push_url}``               | HMAC headers                      |
-|                      | (``/odoo/events`` by convention)  |                                   |
-+----------------------+-----------------------------------+-----------------------------------+
-| gateway -> Odoo      | ``POST /hermes/reply``            | HMAC headers                      |
-+----------------------+-----------------------------------+-----------------------------------+
-| gateway -> Odoo      | ``POST /hermes/poll``             | ``Authorization: Bearer <token>`` |
-+----------------------+-----------------------------------+-----------------------------------+
-| gateway -> Odoo      | ``POST /hermes/webhook/<token>``, | token in path                     |
-| (legacy)             | ``/hermes/push/<token>``          |                                   |
-+----------------------+-----------------------------------+-----------------------------------+
-| gateway -> Odoo      | ``POST /hermes/notify/<token>``   | token in path                     |
-+----------------------+-----------------------------------+-----------------------------------+
++----------------------+-------------------------------------+-----------------------------------+
+| Direction            | Endpoint                            | Auth                              |
++======================+=====================================+===================================+
+| Odoo -> agent        | ``POST {push_url}``                 | HMAC headers                      |
+|                      | (``/odoo/events`` by convention)    |                                   |
++----------------------+-------------------------------------+-----------------------------------+
+| agent -> Odoo        | ``POST /ai_agent/reply``            | HMAC headers                      |
++----------------------+-------------------------------------+-----------------------------------+
+| agent -> Odoo        | ``POST /ai_agent/poll``             | ``Authorization: Bearer <token>`` |
++----------------------+-------------------------------------+-----------------------------------+
+| agent -> Odoo        | ``POST /ai_agent/webhook/<token>``, | token in path                     |
+| (legacy)             | ``/ai_agent/push/<token>``          |                                   |
++----------------------+-------------------------------------+-----------------------------------+
+| agent -> Odoo        | ``POST /ai_agent/notify/<token>``   | token in path                     |
++----------------------+-------------------------------------+-----------------------------------+
 
 Every JSON answer carries ``status`` in the body (``ok``/``error`` plus
 an ``error`` code): the JSON-RPC transport always returns HTTP 200, so
@@ -484,11 +484,11 @@ Letting the assistant read Odoo as the user
 A user can hand their own API key to the assistant, so answers can be
 based on records **that user** is allowed to see:
 
-1. The administrator enables **Allow users to connect** on the gateway.
+1. The administrator enables **Allow users to connect** on the agent.
 2. The user opens **Preferences → Hermes AI** and clicks **Connect
    Hermes**. Odoo creates an API key in that user's own name (scope
-   ``rpc``) and leaves it in a one-shot hand-off for the gateway.
-3. The gateway collects it on ``/hermes/credentials``, stores it
+   ``rpc``) and leaves it in a one-shot hand-off for the agent.
+3. The agent collects it on ``/ai_agent/credentials``, stores it
    encrypted on its side, checks it with a real RPC call, and wipes the
    plaintext in Odoo.
 4. **Disconnect** revokes the key immediately; otherwise it expires
@@ -500,7 +500,7 @@ rights and record rules: it cannot read what the user cannot read, and
 the key can be revoked from the same screen.
 
 Note: Odoo stores API keys hashed, so a key cannot be read back later.
-The hand-off is therefore one-shot: if the gateway loses it, the user
+The hand-off is therefore one-shot: if the agent loses it, the user
 reconnects.
 
 Letting the assistant use Odoo tools
@@ -508,7 +508,7 @@ Letting the assistant use Odoo tools
 
 A connected user can also let the assistant *query* Odoo. The default
 policy is **Any model the user may read** (``tool_access_mode`` on the
-gateway): the assistant inherits the user's own API key, so it can read
+agent): the assistant inherits the user's own API key, so it can read
 exactly what that user can read in the interface, and nothing else. Read
 methods only (``search_read``, ``read``, ``fields_get``,
 ``search_count``, ``read_group``); no write is exposed yet.
@@ -527,7 +527,7 @@ Odoo's own access rights:
   may keep payroll or contracts out of the assistant even though the
   user could open them.
 
-The gateway checks every call with Odoo before running it and uses the
+The agent checks every call with Odoo before running it and uses the
 user's own key, so a cached tool list or a prompt injection cannot widen
 either mode. ``odoo_models`` lets the assistant discover what it may
 query instead of guessing.
@@ -568,12 +568,12 @@ an arbitrary server file by naming it.
 Troubleshooting
 ---------------
 
-- *Queue rows stay pending*: the gateway is not polling and push is
+- *Queue rows stay pending*: the agent is not polling and push is
   disabled or failing — check ``last_error``/``last_error_date`` on the
-  gateway, and ``pending_count`` for the queue depth.
-- *``dead`` state*: ``max_attempts`` reached. Fix the gateway, then use
+  agent, and ``pending_count`` for the queue depth.
+- *``dead`` state*: ``max_attempts`` reached. Fix the agent, then use
   **Retry** on the queue rows.
-- *Signature rejected*: the gateway clock is more than 5 minutes off, or
+- *Signature rejected*: the agent clock is more than 5 minutes off, or
   the secret does not match the one in Odoo.
 
 Known issues / Roadmap
@@ -583,16 +583,16 @@ Known issues / Roadmap
   confirmation in Discuss, on top of the read-only tools already shipped
 - Multi-tenant routing: a shared Hermes instance serving several Odoo
   databases, one profile per tenant
-- Per-tenant quotas and usage metering (in a child module or the
-  gateway, never in the transport)
+- Per-tenant quotas and usage metering (in a child module or the agent,
+  never in the transport)
 - Support for file attachments and images
 - Voice message integration
 - Interactive approval buttons in Discuss messages (e.g.
   "Approve/Reject" actions for sensitive operations) — nice to have for
   escalation workflows
 - Native Hermes platform adapter (``platform="odoo"``) consuming the
-  push envelope directly, without a separate gateway script
-- WebSocket transport for browsers that cannot reach the gateway
+  push envelope directly, without a separate agent script
+- WebSocket transport for browsers that cannot reach the agent
 
 Bug Tracker
 ===========

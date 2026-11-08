@@ -13,9 +13,9 @@ from odoo import _, api, fields, models
 from odoo.release import version as odoo_version
 
 
-class HermesGateway(models.Model):
-    _name = "hermes.gateway"
-    _description = "Hermes Gateway Configuration"
+class AiBridgeAgent(models.Model):
+    _name = "ai.bridge.agent"
+    _description = "AI agent Configuration"
     _inherit = ["mail.thread"]
 
     name = fields.Char(required=True, translate=True)
@@ -26,30 +26,31 @@ class HermesGateway(models.Model):
         default=lambda self: (
             self.env["ir.config_parameter"].sudo().get_param("web.base.url")
         ),
-        help="The base URL of this Odoo instance that Hermes will connect to.",
+        help="The base URL of this Odoo instance that AI agent will connect to.",
     )
     webhook_token = fields.Char(
         default=lambda self: secrets.token_hex(32),
         groups="base.group_system",
-        help="Secret token shared with the Hermes gateway for authentication.",
+        help="Secret token shared with the AI agent for authentication.",
         readonly=True,
         copy=False,
     )
-    hermes_url = fields.Char(
-        string="Hermes URL",
-        help="URL of the Hermes gateway (optional, for reference).",
+    agent_url = fields.Char(
+        string="AI agent URL",
+        help="URL of the AI agent (optional, for reference).",
     )
     channel_ids = fields.Many2many(
         "discuss.channel",
         string="Monitored Channels",
-        help="Channels where Hermes will respond. Leave empty to monitor all channels.",
+        help="Channels where the assistant answers. Leave empty to monitor "
+        "every channel.",
     )
     ai_user_id = fields.Many2one(
         "res.users",
         string="AI User",
         required=True,
         domain=[("ai_bridge_id", "!=", False)],
-        help="The Odoo user that Hermes will post responses as.",
+        help="The Odoo user that AI agent will post responses as.",
     )
     state = fields.Selection(
         [("draft", "Draft"), ("connected", "Connected"), ("error", "Error")],
@@ -64,12 +65,12 @@ class HermesGateway(models.Model):
         ],
         default="polling",
         required=True,
-        help="How Hermes connects to Odoo. "
-        "Polling = Hermes polls Odoo. "
-        "Webhook = Odoo pushes to Hermes.",
+        help="How AI agent connects to Odoo. "
+        "Polling = AI agent polls Odoo. "
+        "Webhook = Odoo pushes to AI agent.",
     )
-    gateway_version = fields.Char(
-        help="Version of the Hermes gateway script (for compatibility checks).",
+    agent_version = fields.Char(
+        help="Version of the AI agent script (for compatibility checks).",
     )
     last_error = fields.Text(readonly=True)
     last_error_date = fields.Datetime(readonly=True)
@@ -78,14 +79,14 @@ class HermesGateway(models.Model):
         readonly=True,
         copy=False,
         index=True,
-        help="Stable identifier of this database inside a shared Hermes "
-        "instance. Shared by every gateway of the database.",
+        help="Stable identifier of this database inside a shared AI agent "
+        "instance. Shared by every agent of the database.",
     )
     environment = fields.Selection(
         [("prod", "Production"), ("staging", "Staging"), ("dev", "Development")],
         default="prod",
         required=True,
-        help="Deployment stage. It is part of the Hermes session key, so a "
+        help="Deployment stage. It is part of the AI agent session key, so a "
         "staging database restored from production never shares a "
         "conversation with it.",
     )
@@ -93,27 +94,27 @@ class HermesGateway(models.Model):
         [("user", "Per user"), ("channel", "Per channel")],
         default="user",
         required=True,
-        help="Granularity of the persistent Hermes session. 'Per user' keeps "
+        help="Granularity of the persistent AI agent session. 'Per user' keeps "
         "one conversation per user across all their channels.",
     )
     push_enabled = fields.Boolean(
-        help="Push new messages to the Hermes gateway in real time. When "
-        "disabled, the gateway falls back to polling.",
+        help="Push new messages to the AI agent in real time. When "
+        "disabled, the agent falls back to polling.",
     )
     push_url = fields.Char(
         help="Endpoint receiving the Odoo events, for instance "
-        "https://hermes.example.com/odoo/events.",
+        "https://responder.example.com/ai_agent/events.",
     )
     push_secret = fields.Char(
         groups="base.group_system",
         default=lambda self: secrets.token_hex(32),
         copy=False,
-        help="Secret used to sign the events pushed to the gateway.",
+        help="Secret used to sign the events pushed to the agent.",
     )
     max_batch_size = fields.Integer(default=50)
     claim_ttl_minutes = fields.Integer(
         default=5,
-        help="Delay after which a message claimed by a gateway but never "
+        help="Delay after which a message claimed by a agent but never "
         "answered is handed back to the queue.",
     )
     max_attempts = fields.Integer(default=5)
@@ -134,14 +135,14 @@ class HermesGateway(models.Model):
     allowed_group_ids = fields.Many2many(
         "res.groups",
         default=lambda self: self._default_allowed_groups(),
-        help="Groups allowed to chat with Hermes through this gateway. "
-        "Leave empty to fall back on the 'Use Hermes AI' group.",
+        help="Groups allowed to chat with AI agent through this agent. "
+        "Leave empty to fall back on the 'Use the AI assistant' group.",
     )
     access_denied_message = fields.Text(
         translate=True,
         default=lambda self: _(
-            "You are not allowed to use the Hermes AI assistant. Please ask "
-            "your administrator to add you to the 'Use Hermes AI' group."
+            "You are not allowed to use the AI assistant. Please ask "
+            "your administrator to add you to the 'Use the AI assistant' group."
         ),
     )
     denial_cooldown_minutes = fields.Integer(
@@ -150,7 +151,7 @@ class HermesGateway(models.Model):
         "channel, to avoid flooding it.",
     )
     allow_user_connect = fields.Boolean(
-        help="Let users hand their own Odoo API key over to the gateway, so the "
+        help="Let users hand their own Odoo API key over to the agent, so the "
         "assistant can read Odoo with their own access rights.",
     )
     credential_ttl_days = fields.Integer(
@@ -172,8 +173,8 @@ class HermesGateway(models.Model):
     )
     tool_excluded_model_ids = fields.Many2many(
         "ir.model",
-        "hermes_gateway_excluded_model_rel",
-        "gateway_id",
+        "agent_excluded_model_rel",
+        "agent_id",
         "model_id",
         string="Models hidden from the assistant",
         help="Models the assistant may not query even when the user can read "
@@ -181,7 +182,7 @@ class HermesGateway(models.Model):
     )
     require_api_key_for_tools = fields.Boolean(
         default=True,
-        help="Only tell the gateway that it may call Odoo on behalf of a user "
+        help="Only tell the agent that it may call Odoo on behalf of a user "
         "when that user owns an Odoo API key. Users without a key keep the "
         "generic assistant capabilities.",
     )
@@ -190,31 +191,33 @@ class HermesGateway(models.Model):
     def _default_tenant_key(self):
         """Return the tenant key of this database, creating it once."""
         params = self.env["ir.config_parameter"].sudo()
-        key = params.get_param("hermes.tenant_key")
+        key = params.get_param("ai_bridge_agent.tenant_key")
+        if not key:
+            # Keep the identity of a database upgraded from the previous name,
+            # so running conversations are not orphaned by the rename.
+            key = params.get_param("hermes.tenant_key")
         if not key:
             key = secrets.token_hex(8)
-            params.set_param("hermes.tenant_key", key)
+        params.set_param("ai_bridge_agent.tenant_key", key)
         return key
 
     def _compute_message_count(self):
-        queue = self.env["hermes.message.queue"]
-        for gateway in self:
-            gateway.message_count = queue.search_count(
-                [("gateway_id", "=", gateway.id)]
-            )
+        queue = self.env["ai.bridge.agent.message"]
+        for agent in self:
+            agent.message_count = queue.search_count([("agent_id", "=", agent.id)])
 
     def _compute_pending_count(self):
-        queue = self.env["hermes.message.queue"]
-        for gateway in self:
-            gateway.pending_count = queue.search_count(
+        queue = self.env["ai.bridge.agent.message"]
+        for agent in self:
+            agent.pending_count = queue.search_count(
                 [
-                    ("gateway_id", "=", gateway.id),
+                    ("agent_id", "=", agent.id),
                     ("state", "in", ("pending", "processing", "pushed")),
                 ]
             )
 
     def _get_session_key(self, user=None, channel=None):
-        """Build the Hermes session key for this tenant and scope."""
+        """Build the AI agent session key for this tenant and scope."""
         self.ensure_one()
         if self.session_scope == "channel" or not user:
             scope = f"channel_{channel.id if channel else 0}"
@@ -224,10 +227,10 @@ class HermesGateway(models.Model):
 
     @api.model
     def _find_by_token(self, token):
-        """Return the active gateway owning ``token`` (grace included)."""
+        """Return the active agent owning ``token`` (grace included)."""
         if not token:
             return self.browse()
-        gateway = self.search(
+        agent = self.search(
             [
                 ("active", "=", True),
                 "|",
@@ -236,8 +239,8 @@ class HermesGateway(models.Model):
             ],
             limit=1,
         )
-        if gateway and gateway._is_token_valid(token):
-            return gateway
+        if agent and agent._is_token_valid(token):
+            return agent
         return self.browse()
 
     def _is_token_valid(self, token):
@@ -274,7 +277,7 @@ class HermesGateway(models.Model):
         return group
 
     def _is_user_allowed(self, user):
-        """Tell whether ``user`` may chat with Hermes through this gateway."""
+        """Tell whether ``user`` may chat with AI agent through this agent."""
         self.ensure_one()
         if not user:
             return False
@@ -287,10 +290,10 @@ class HermesGateway(models.Model):
         return user.has_group("ai_oca_bridge_agent.group_agent_user")
 
     def _get_capabilities(self, message):
-        """Describe what the gateway may do on behalf of the user.
+        """Describe what the agent may do on behalf of the user.
 
         Extension point: child modules refine the tiers without touching the
-        transport. The gateway keeps the actual policy (tools, prompts).
+        transport. The agent keeps the actual policy (tools, prompts).
         """
         self.ensure_one()
         has_key = bool(message.user_has_api_key)
@@ -301,7 +304,7 @@ class HermesGateway(models.Model):
         }
 
     def _get_tenant_info(self):
-        """Public description of this Odoo instance inside a Hermes install."""
+        """Public description of this Odoo instance inside a AI agent install."""
         self.ensure_one()
         return {
             "key": self.tenant_key,
@@ -312,7 +315,7 @@ class HermesGateway(models.Model):
         }
 
     def _build_event_payload(self, message):
-        """Build the event pushed to the gateway for one queued message.
+        """Build the event pushed to the agent for one queued message.
 
         Extension point: override to enrich the payload (record context,
         business hints, ...) without leaking that logic into the OCA module.
@@ -324,7 +327,7 @@ class HermesGateway(models.Model):
         return {
             "tenant": self._get_tenant_info(),
             "event": "message.created",
-            "gateway_id": self.id,
+            "agent_id": self.id,
             "session_key": session_key,
             "delivery_id": message.delivery_id,
             "message": {
@@ -344,7 +347,7 @@ class HermesGateway(models.Model):
             },
             "capabilities": self._get_capabilities(message),
             "reply_to": {
-                "url": f"{(self.odoo_url or '').rstrip('/')}/hermes/reply",
+                "url": f"{(self.odoo_url or '').rstrip('/')}/ai_agent/reply",
                 "auth": "hmac",
             },
         }
@@ -353,14 +356,15 @@ class HermesGateway(models.Model):
         self.ensure_one()
         return {
             "Content-Type": "application/json",
-            "X-Hermes-Tenant": self.tenant_key or "",
-            "X-Hermes-Timestamp": timestamp,
-            "X-Hermes-Delivery": delivery_id or "",
-            "X-Hermes-Signature": "sha256=" + self._compute_signature(timestamp, body),
+            "X-AI-Agent-Tenant": self.tenant_key or "",
+            "X-AI-Agent-Timestamp": timestamp,
+            "X-AI-Agent-Delivery": delivery_id or "",
+            "X-AI-Agent-Signature": "sha256="
+            + self._compute_signature(timestamp, body),
         }
 
     def _push_message(self, message, timeout=3):
-        """Push one queued message to the gateway, never raise."""
+        """Push one queued message to the agent, never raise."""
         self.ensure_one()
         if not self.push_enabled or not self.push_url:
             return False
@@ -407,25 +411,25 @@ class HermesGateway(models.Model):
 
     def action_regenerate_token(self):
         """Rotate the webhook token, keeping the previous one during the grace."""
-        for gateway in self:
-            gateway.write(
+        for agent in self:
+            agent.write(
                 {
-                    "webhook_token_previous": gateway.webhook_token,
+                    "webhook_token_previous": agent.webhook_token,
                     "webhook_token": secrets.token_hex(32),
                     "token_rotated_at": fields.Datetime.now(),
                 }
             )
 
     def action_test_connection(self):
-        """Test connectivity by polling the gateway health endpoint."""
+        """Test connectivity by polling the agent health endpoint."""
         self.ensure_one()
-        if not self.hermes_url:
-            return self._notify(_("No Hermes URL configured"), "warning")
+        if not self.agent_url:
+            return self._notify(_("No AI agent URL configured"), "warning")
         try:
             import requests
 
             resp = requests.get(
-                f"{self.hermes_url}/health",
+                f"{self.agent_url}/health",
                 timeout=5,
                 headers={"Authorization": f"Bearer {self.webhook_token}"},
             )
@@ -443,5 +447,5 @@ class HermesGateway(models.Model):
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
-            "params": {"title": "Hermes Gateway", "message": message, "type": type_},
+            "params": {"title": "AI agent", "message": message, "type": type_},
         }

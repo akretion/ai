@@ -18,25 +18,25 @@ except ImportError:
     AI_TOOL_AVAILABLE = False
 
 
-class HermesToolsController(http.Controller):
-    """Endpoint for Hermes to execute Odoo tools.
+class AgentToolsController(http.Controller):
+    """Endpoint for AI agent to execute Odoo tools.
 
-    This controller provides a native API for Hermes to call Odoo tools.
+    This controller provides a native API for AI agent to call Odoo tools.
     If ai_tool is installed, tools are also available via MCP.
 
     Tools are discovered dynamically from:
     1. ai.tool records (when ai_tool is installed)
-    2. hermes.tools.mock methods (always available for testing)
+    2. ai.bridge.agent.tools.mock methods (always available for testing)
     """
 
     @http.route(
-        "/hermes/tools/execute",
+        "/ai_agent/tools/execute",
         type="json",
         auth="public",
         methods=["POST"],
         csrf=False,
     )
-    def hermes_tools_execute(self, **kwargs):
+    def agent_tools_execute(self, **kwargs):
         """Execute an Odoo tool and return the result.
 
         Expected JSON body:
@@ -48,8 +48,8 @@ class HermesToolsController(http.Controller):
         # Validate auth token from Authorization header
         auth_header = request.httprequest.headers.get("Authorization", "")
         token = auth_header.replace("Bearer ", "").strip() if auth_header else ""
-        gateway = request.env["hermes.gateway"].sudo()._find_by_token(token)
-        if not gateway:
+        agent = request.env["ai.bridge.agent"].sudo()._find_by_token(token)
+        if not agent:
             return {"status": "error", "message": "Invalid token"}
 
         data = request.get_json_data()
@@ -62,8 +62,8 @@ class HermesToolsController(http.Controller):
         if not tool_name:
             return {"status": "error", "message": "Missing 'tool' parameter"}
 
-        # Get the AI user from the gateway for permission context
-        ai_user = gateway.ai_user_id
+        # Get the AI user from the agent for permission context
+        ai_user = agent.ai_user_id
         if not ai_user:
             return {"status": "error", "message": "No AI user configured"}
 
@@ -72,98 +72,102 @@ class HermesToolsController(http.Controller):
             result = self._execute_tool(request.env(user=ai_user.id), tool_name, args)
             return {"status": "ok", "result": result}
         except Exception as e:
-            _logger.warning("Hermes tool execution failed: %s - %s", tool_name, e)
+            _logger.warning("AI agent tool execution failed: %s - %s", tool_name, e)
             return {"status": "error", "message": str(e)}
 
     @http.route(
-        "/hermes/tools/list",
+        "/ai_agent/tools/list",
         type="json",
         auth="public",
         methods=["GET", "POST"],
         csrf=False,
     )
-    def hermes_tools_list(self, **kwargs):
+    def agent_tools_list(self, **kwargs):
         """List available tools with their schemas."""
         auth_header = request.httprequest.headers.get("Authorization", "")
         token = auth_header.replace("Bearer ", "").strip() if auth_header else ""
-        gateway = request.env["hermes.gateway"].sudo()._find_by_token(token)
-        if not gateway:
+        agent = request.env["ai.bridge.agent"].sudo()._find_by_token(token)
+        if not agent:
             return {"tools": [], "error": "Invalid token"}
 
         tools = self._get_available_tools(request.env)
         return {"tools": tools}
 
     @http.route(
-        "/hermes/tools/available",
+        "/ai_agent/tools/available",
         type="json",
         auth="public",
         methods=["POST"],
         csrf=False,
     )
-    def hermes_tools_available(self, **kwargs):
+    def agent_tools_available(self, **kwargs):
         """Tools opened to one user, from the Odoo-side whitelist."""
-        gateway = self._get_gateway()
-        if not gateway:
+        agent = self._get_gateway()
+        if not agent:
             return {"status": "error", "error": "invalid_token"}
         data = request.get_json_data() or {}
         user = self._get_user(data.get("user_id"))
         if isinstance(user, dict):
             return user
-        if not gateway._is_user_allowed(user):
+        if not agent._is_user_allowed(user):
             return {"status": "error", "error": "user_not_allowed"}
-        tools = request.env["hermes.tool"].sudo()
+        tools = request.env["ai.bridge.agent.tool"].sudo()
         return {
             "status": "ok",
-            "mode": gateway.tool_access_mode,
+            "mode": agent.tool_access_mode,
             "tools": [tool._as_tool_dict() for tool in tools._for_user(user)],
-            "models": tools._readable_models(user, gateway)[:500],
+            "models": tools._readable_models(user, agent)[:500],
         }
 
     @http.route(
-        "/hermes/tools/models",
+        "/ai_agent/tools/models",
         type="json",
         auth="public",
         methods=["POST"],
         csrf=False,
     )
-    def hermes_tools_models(self, **kwargs):
+    def agent_tools_models(self, **kwargs):
         """Models the assistant may query for this user, so it can discover."""
-        gateway = self._get_gateway()
-        if not gateway:
+        agent = self._get_gateway()
+        if not agent:
             return {"status": "error", "error": "invalid_token"}
         data = request.get_json_data() or {}
         user = self._get_user(data.get("user_id"))
         if isinstance(user, dict):
             return user
-        if not gateway._is_user_allowed(user):
+        if not agent._is_user_allowed(user):
             return {"status": "error", "error": "user_not_allowed"}
-        models = request.env["hermes.tool"].sudo()._readable_models(user, gateway)[:500]
-        return {"status": "ok", "mode": gateway.tool_access_mode, "models": models}
+        models = (
+            request.env["ai.bridge.agent.tool"]
+            .sudo()
+            ._readable_models(user, agent)[:500]
+        )
+        return {"status": "ok", "mode": agent.tool_access_mode, "models": models}
 
     @http.route(
-        "/hermes/tools/resolve",
+        "/ai_agent/tools/resolve",
         type="json",
         auth="public",
         methods=["POST"],
         csrf=False,
     )
-    def hermes_tools_resolve(self, **kwargs):
+    def agent_tools_resolve(self, **kwargs):
         """May this user use this tool, and with which limits?
 
-        The gateway checks every call here before running the query with the
+        The agent checks every call here before running the query with the
         user's own API key, so a stale cache or a prompt injection cannot widen
         what the whitelist allows.
         """
-        gateway = self._get_gateway()
-        if not gateway:
+        agent = self._get_gateway()
+        if not agent:
             return {"status": "error", "error": "invalid_token"}
         data = request.get_json_data() or {}
         user = self._get_user(data.get("user_id"))
         if isinstance(user, dict):
             return user
-        if not gateway._is_user_allowed(user):
+        if not agent._is_user_allowed(user):
             return {"status": "error", "error": "user_not_allowed"}
-        tools = request.env["hermes.tool"].sudo()
+        tools = request.env["ai.bridge.agent.tool"].sudo()
         if data.get("tool"):
             tool = tools._resolve_for_user(user, (data.get("tool") or "").strip())
         else:
@@ -171,7 +175,7 @@ class HermesToolsController(http.Controller):
                 user,
                 (data.get("model") or "").strip(),
                 (data.get("method") or "search_read").strip(),
-                gateway=gateway,
+                agent=agent,
             )
         if not tool:
             return {"status": "error", "error": "tool_not_allowed"}
@@ -182,7 +186,7 @@ class HermesToolsController(http.Controller):
         token = auth_header.replace("Bearer ", "").strip() if auth_header else ""
         if not token:
             return None
-        return request.env["hermes.gateway"].sudo()._find_by_token(token)
+        return request.env["ai.bridge.agent"].sudo()._find_by_token(token)
 
     def _get_user(self, user_id):
         try:
@@ -199,7 +203,7 @@ class HermesToolsController(http.Controller):
 
         Discovers tools from:
         1. ai.tool records (if ai_tool installed)
-        2. hermes.tools.mock methods (always available)
+        2. ai.bridge.agent.tools.mock methods (always available)
         """
         tools = []
 
@@ -225,7 +229,7 @@ class HermesToolsController(http.Controller):
                 _logger.debug("Could not load ai.tool records: %s", e)
 
         # 2. Mock tools (always available for testing)
-        mock_model = env.get("hermes.tools.mock")
+        mock_model = env.get("ai.bridge.agent.tools.mock")
         if mock_model:
             for method_name in dir(mock_model):
                 if not method_name.startswith("_ai_"):
@@ -242,7 +246,7 @@ class HermesToolsController(http.Controller):
                         "description": doc,
                         "input_schema": {"type": "object", "properties": {}},
                         "output_schema": {"type": "object", "properties": {}},
-                        "source": "hermes.tools.mock",
+                        "source": "ai.bridge.agent.tools.mock",
                     }
                 )
 
@@ -261,7 +265,7 @@ class HermesToolsController(http.Controller):
 
         # Fallback to mock tools
         method_name = f"_ai_{tool_name}"
-        mock_model = env.get("hermes.tools.mock")
+        mock_model = env.get("ai.bridge.agent.tools.mock")
         if mock_model and hasattr(mock_model, method_name):
             method = getattr(mock_model, method_name)
             return method(**args)

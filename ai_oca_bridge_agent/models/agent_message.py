@@ -8,9 +8,9 @@ from odoo import api, fields, models
 from odoo.tools.mail import html2plaintext
 
 
-class HermesMessageQueue(models.Model):
-    _name = "hermes.message.queue"
-    _description = "Messages queued for Hermes"
+class AiBridgeAgentMessage(models.Model):
+    _name = "ai.bridge.agent.message"
+    _description = "Messages queued for AI agent"
     _order = "create_date asc, id asc"
 
     channel_id = fields.Many2one("discuss.channel", required=True, index=True)
@@ -22,7 +22,7 @@ class HermesMessageQueue(models.Model):
         [
             ("pending", "Pending"),
             ("processing", "Processing"),
-            ("pushed", "Pushed to gateway"),
+            ("pushed", "Pushed to agent"),
             ("done", "Done"),
             ("error", "Error"),
             ("dead", "Dead"),
@@ -39,21 +39,21 @@ class HermesMessageQueue(models.Model):
         "res.users",
         string="Requesting User",
         index=True,
-        help="Odoo user the message belongs to. The gateway uses it to call "
+        help="Odoo user the message belongs to. The agent uses it to call "
         "Odoo with that user's own access rights.",
     )
     user_has_api_key = fields.Boolean(
         readonly=True,
-        help="Tell the gateway whether the requesting user gave it an Odoo API "
+        help="Tell the agent whether the requesting user gave it an Odoo API "
         "key, i.e. whether it may call Odoo on their behalf.",
     )
     session_key = fields.Char(
         index=True,
-        help="Hermes session this message belongs to.",
+        help="AI agent session this message belongs to.",
     )
     delivery_id = fields.Char(
         index=True,
-        help="Idempotency key of the event pushed to the gateway.",
+        help="Idempotency key of the event pushed to the agent.",
     )
     attempts = fields.Integer(default=0, readonly=True)
     next_attempt_at = fields.Datetime(readonly=True)
@@ -67,8 +67,8 @@ class HermesMessageQueue(models.Model):
     )
     tokens_in = fields.Integer(default=0, readonly=True)
     tokens_out = fields.Integer(default=0, readonly=True)
-    gateway_id = fields.Many2one("hermes.gateway", required=True, index=True)
-    db_hash = fields.Char(help="Database hash for Hermes session key.")
+    agent_id = fields.Many2one("ai.bridge.agent", required=True, index=True)
+    db_hash = fields.Char(help="Database hash for AI agent session key.")
     error_message = fields.Text()
     message_type = fields.Selection(
         [
@@ -122,31 +122,33 @@ class HermesMessageQueue(models.Model):
             for message in reversed(messages)
         ]
 
-    def _claim_batch(self, gateway, limit=None, worker="odoo"):
-        """Claim pending messages for one gateway, atomically.
+    def _claim_batch(self, agent, limit=None, worker="odoo"):
+        """Claim pending messages for one agent, atomically.
 
-        Several gateway workers may poll concurrently: the ``FOR UPDATE SKIP
+        Several agent workers may poll concurrently: the ``FOR UPDATE SKIP
         LOCKED`` clause guarantees that two workers never receive the same
         row, whatever the number of Odoo workers behind the HTTP endpoint.
         """
-        limit = limit or gateway.max_batch_size or 50
+        limit = limit or agent.max_batch_size or 50
         now = fields.Datetime.now()
         self.flush_model(
             ["state", "next_attempt_at", "claimed_at", "claimed_by", "attempts"]
         )
+        # The table name follows the model, never hardcoded in the SQL.
+        table = self._table
         self.env.cr.execute(
-            """
+            f"""
             WITH claimed AS (
                 SELECT id
-                  FROM hermes_message_queue
-                 WHERE gateway_id = %s
+                  FROM {table}
+                 WHERE agent_id = %s
                    AND state = 'pending'
                    AND (next_attempt_at IS NULL OR next_attempt_at <= %s)
                  ORDER BY id
                  LIMIT %s
                    FOR UPDATE SKIP LOCKED
             )
-            UPDATE hermes_message_queue q
+            UPDATE {table} q
                SET state = 'processing',
                    claimed_at = %s,
                    claimed_by = %s,
@@ -155,26 +157,26 @@ class HermesMessageQueue(models.Model):
              WHERE q.id = claimed.id
             RETURNING q.id
             """,
-            (gateway.id, now, limit, now, worker),
+            (agent.id, now, limit, now, worker),
         )
         ids = sorted(row[0] for row in self.env.cr.fetchall())
         records = self.browse(ids)
         records.invalidate_recordset()
         return records
 
-    def _requeue_stale(self, gateway):
+    def _requeue_stale(self, agent):
         """Hand back messages claimed but never answered, or mark them dead."""
         deadline = fields.Datetime.now() - timedelta(
-            minutes=gateway.claim_ttl_minutes or 5
+            minutes=agent.claim_ttl_minutes or 5
         )
         stale = self.search(
             [
-                ("gateway_id", "=", gateway.id),
+                ("agent_id", "=", agent.id),
                 ("state", "in", ("processing", "pushed")),
                 ("claimed_at", "<", deadline),
             ]
         )
-        max_attempts = gateway.max_attempts or 5
+        max_attempts = agent.max_attempts or 5
         for message in stale:
             if message.attempts >= max_attempts:
                 message.write(
@@ -195,7 +197,7 @@ class HermesMessageQueue(models.Model):
         """Record a delivery failure: retry with a backoff, or give up."""
         self.ensure_one()
         values = {"error_message": reason, "claimed_at": False, "claimed_by": False}
-        if self.attempts >= (self.gateway_id.max_attempts or 5):
+        if self.attempts >= (self.agent_id.max_attempts or 5):
             values["state"] = "dead"
         else:
             delay = min(2 ** max(self.attempts, 1), 60)
@@ -216,56 +218,54 @@ class HermesMessageQueue(models.Model):
         )
 
     def _mark_pushed(self, http_status):
-        """The gateway accepted the event; its answer is pending."""
+        """The agent accepted the event; its answer is pending."""
         self.write(
             {"state": "pushed", "last_http_status": http_status, "error_message": False}
         )
 
     def _schedule_push(self):
-        """Push the messages to the gateway once the transaction is committed.
+        """Push the messages to the agent once the transaction is committed.
 
-        The callback runs after the commit, so the gateway never receives a
+        The callback runs after the commit, so the agent never receives a
         message the database could still roll back.
         """
         for message in self:
-            gateway = message.gateway_id
-            if gateway.push_enabled and gateway.push_url:
-                self.env.cr.postcommit.add(
-                    partial(gateway.sudo()._push_message, message)
-                )
+            agent = message.agent_id
+            if agent.push_enabled and agent.push_url:
+                self.env.cr.postcommit.add(partial(agent.sudo()._push_message, message))
 
     @api.model
     def _cron_push_queue(self):
         """Safety net: push the messages the post-commit hook could not send."""
         now = fields.Datetime.now()
-        gateways = (
-            self.env["hermes.gateway"]
+        agents = (
+            self.env["ai.bridge.agent"]
             .sudo()
             .search([("push_enabled", "=", True), ("push_url", "!=", False)])
         )
-        for gateway in gateways:
-            self.sudo()._requeue_stale(gateway)
+        for agent in agents:
+            self.sudo()._requeue_stale(agent)
             due = self.sudo().search(
                 [
-                    ("gateway_id", "=", gateway.id),
+                    ("agent_id", "=", agent.id),
                     ("state", "=", "pending"),
                     "|",
                     ("next_attempt_at", "=", False),
                     ("next_attempt_at", "<=", now),
                 ],
                 order="id asc",
-                limit=gateway.max_batch_size or 50,
+                limit=agent.max_batch_size or 50,
             )
             for message in due:
-                gateway._push_message(message)
+                agent._push_message(message)
 
     @api.model
-    def _find_by_delivery(self, gateway, delivery_id):
+    def _find_by_delivery(self, agent, delivery_id):
         """Return the message already answered under ``delivery_id``, if any."""
         if not delivery_id:
             return self.browse()
         return self.search(
-            [("gateway_id", "=", gateway.id), ("delivery_id", "=", delivery_id)],
+            [("agent_id", "=", agent.id), ("delivery_id", "=", delivery_id)],
             limit=1,
         )
 

@@ -5,7 +5,7 @@ import base64
 
 from odoo.tests import TransactionCase, tagged
 
-from ..controllers.hermes_webhook import ATTACHMENT_MAX_COUNT, HermesWebhook
+from ..controllers.agent_webhook import ATTACHMENT_MAX_COUNT, AgentWebhook
 
 try:
     import markdown  # noqa: F401
@@ -17,7 +17,7 @@ except ImportError:  # pragma: no cover - mirrors the controller fallback
 class TestReplyRendering(TransactionCase):
     def setUp(self):
         super().setUp()
-        self.controller = HermesWebhook()
+        self.controller = AgentWebhook()
         self.user = self.env["res.users"].create(
             {
                 "name": "Rendering User",

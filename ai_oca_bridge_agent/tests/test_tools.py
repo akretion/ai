@@ -5,7 +5,7 @@ from odoo.tests import TransactionCase, tagged
 
 
 @tagged("post_install", "-at_install")
-class TestHermesTools(TransactionCase):
+class TestAgentTools(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -25,23 +25,23 @@ class TestHermesTools(TransactionCase):
                 "groups_id": [(6, 0, [cls.env.ref("base.group_user").id])],
             }
         )
-        cls.gateway = cls.env["hermes.gateway"].create(
-            {"name": "Tools Gateway", "ai_user_id": cls.user.id}
+        cls.agent = cls.env["ai.bridge.agent"].create(
+            {"name": "Tools Agent", "ai_user_id": cls.user.id}
         )
-        cls.power_group = cls.env["res.groups"].create({"name": "Hermes Power Users"})
+        cls.power_group = cls.env["res.groups"].create({"name": "AI agent Power Users"})
         cls.env.ref("ai_oca_bridge_agent.tool_partners").allowed_group_ids = [
             (6, 0, [cls.env.ref("base.group_user").id])
         ]
 
     def test_default_tools_are_read_only_search_read(self):
-        tool = self.env["hermes.tool"]._resolve_for_user(self.user, "partners")
+        tool = self.env["ai.bridge.agent.tool"]._resolve_for_user(self.user, "partners")
         self.assertEqual(tool["model"], "res.partner")
         self.assertEqual(tool["method"], "search_read")
         self.assertEqual(tool["max_limit"], 40)
         self.assertTrue(tool["description"])
 
     def test_user_sees_only_their_groups_tools(self):
-        self.env["hermes.tool"].create(
+        self.env["ai.bridge.agent.tool"].create(
             {
                 "name": "power_moves",
                 "description": "All invoices",
@@ -49,33 +49,37 @@ class TestHermesTools(TransactionCase):
                 "allowed_group_ids": [(6, 0, [self.power_group.id])],
             }
         )
-        user_tools = self.env["hermes.tool"]._for_user(self.user)
+        user_tools = self.env["ai.bridge.agent.tool"]._for_user(self.user)
         self.assertNotIn("power_moves", user_tools.mapped("name"))
         self.assertIsNone(
-            self.env["hermes.tool"]._resolve_for_user(self.user, "power_moves")
+            self.env["ai.bridge.agent.tool"]._resolve_for_user(self.user, "power_moves")
         )
 
         self.outsider.groups_id = [(4, self.power_group.id)]
         self.assertIn(
             "power_moves",
-            self.env["hermes.tool"]._for_user(self.outsider).mapped("name"),
+            self.env["ai.bridge.agent.tool"]._for_user(self.outsider).mapped("name"),
         )
-        tool = self.env["hermes.tool"]._resolve_for_user(self.outsider, "power_moves")
+        tool = self.env["ai.bridge.agent.tool"]._resolve_for_user(
+            self.outsider, "power_moves"
+        )
         self.assertEqual(tool["model"], "account.move")
 
     def test_unknown_tool_is_refused(self):
         self.assertIsNone(
-            self.env["hermes.tool"]._resolve_for_user(self.user, "does_not_exist")
+            self.env["ai.bridge.agent.tool"]._resolve_for_user(
+                self.user, "does_not_exist"
+            )
         )
 
     def test_archived_tool_is_refused(self):
         self.env.ref("ai_oca_bridge_agent.tool_products").active = False
         self.assertIsNone(
-            self.env["hermes.tool"]._resolve_for_user(self.user, "products")
+            self.env["ai.bridge.agent.tool"]._resolve_for_user(self.user, "products")
         )
 
     def test_admin_sees_every_tool(self):
-        tool = self.env["hermes.tool"]._resolve_for_user(
+        tool = self.env["ai.bridge.agent.tool"]._resolve_for_user(
             self.env.ref("base.user_root"), "partners"
         )
         self.assertIsNotNone(tool)
@@ -86,13 +90,13 @@ class TestHermesTools(TransactionCase):
         self.assertEqual(tool._as_tool_dict()["fields"], ["name", "vat"])
 
     def test_fields_get_is_implied_by_a_read_grant(self):
-        tool = self.env["hermes.tool"]._resolve_for_user_model(
+        tool = self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
             self.user, "res.partner", "fields_get"
         )
         self.assertIsNotNone(tool)
 
     def test_search_count_is_implied_by_a_read_grant(self):
-        tool = self.env["hermes.tool"]._resolve_for_user_model(
+        tool = self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
             self.user, "res.partner", "search_count"
         )
         self.assertIsNotNone(tool)
@@ -100,20 +104,20 @@ class TestHermesTools(TransactionCase):
 
     def test_implied_search_count_does_not_grant_reading(self):
         self.assertIsNone(
-            self.env["hermes.tool"]._resolve_for_user_model(
+            self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
                 self.user, "ir.config_parameter", "search_count"
             )
         )
 
     def test_implied_fields_get_does_not_grant_reading(self):
-        tool = self.env["hermes.tool"]._resolve_for_user_model(
+        tool = self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
             self.user, "ir.config_parameter", "fields_get"
         )
         self.assertIsNone(tool)
 
     def test_open_mode_allows_any_model_the_user_may_read(self):
-        tool = self.env["hermes.tool"]._resolve_for_user_model(
-            self.user, "mail.message", "search_read", gateway=self.gateway
+        tool = self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
+            self.user, "mail.message", "search_read", agent=self.agent
         )
         self.assertIsNotNone(tool)
         self.assertEqual(tool["model"], "mail.message")
@@ -121,52 +125,54 @@ class TestHermesTools(TransactionCase):
 
     def test_open_mode_refuses_a_model_the_user_may_not_read(self):
         self.assertIsNone(
-            self.env["hermes.tool"]._resolve_for_user_model(
+            self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
                 self.user,
                 "ir.config_parameter",
                 "search_read",
-                gateway=self.gateway,
+                agent=self.agent,
             )
         )
 
     def test_open_mode_refuses_writing_methods(self):
         for method in ("create", "write", "unlink"):
             self.assertIsNone(
-                self.env["hermes.tool"]._resolve_for_user_model(
-                    self.user, "res.partner", method, gateway=self.gateway
+                self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
+                    self.user, "res.partner", method, agent=self.agent
                 )
             )
 
     def test_excluded_model_is_refused_even_if_readable(self):
-        self.gateway.tool_excluded_model_ids = [
+        self.agent.tool_excluded_model_ids = [
             (6, 0, [self.env.ref("base.model_res_partner").id])
         ]
         self.assertIsNone(
-            self.env["hermes.tool"]._resolve_for_user_model(
-                self.user, "res.partner", "search_read", gateway=self.gateway
+            self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
+                self.user, "res.partner", "search_read", agent=self.agent
             )
         )
 
     def test_whitelist_mode_keeps_open_models_out(self):
-        self.gateway.tool_access_mode = "whitelist"
+        self.agent.tool_access_mode = "whitelist"
         self.assertIsNone(
-            self.env["hermes.tool"]._resolve_for_user_model(
-                self.user, "mail.message", "search_read", gateway=self.gateway
+            self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
+                self.user, "mail.message", "search_read", agent=self.agent
             )
         )
         self.assertIsNotNone(
-            self.env["hermes.tool"]._resolve_for_user_model(
-                self.user, "res.partner", "search_read", gateway=self.gateway
+            self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
+                self.user, "res.partner", "search_read", agent=self.agent
             )
         )
 
     def test_readable_models_lists_only_what_the_user_may_read(self):
-        models = self.env["hermes.tool"]._readable_models(self.user, self.gateway)
+        models = self.env["ai.bridge.agent.tool"]._readable_models(
+            self.user, self.agent
+        )
         self.assertIn("res.partner", models)
         self.assertNotIn("ir.config_parameter", models)
 
     def test_user_without_group_has_no_tool(self):
-        tool_model = self.env["hermes.tool"]
+        tool_model = self.env["ai.bridge.agent.tool"]
         tool_model.env.ref("ai_oca_bridge_agent.tool_partners").allowed_group_ids = [
             (6, 0, [self.power_group.id])
         ]

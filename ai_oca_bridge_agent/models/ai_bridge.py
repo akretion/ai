@@ -8,21 +8,21 @@ class AiBridge(models.Model):
     _inherit = "ai.bridge"
 
     usage = fields.Selection(
-        selection_add=[("hermes", "Hermes AI")],
-        ondelete={"hermes": "set default"},
+        selection_add=[("agent", "AI agent")],
+        ondelete={"agent": "set default"},
     )
     payload_type = fields.Selection(
-        selection_add=[("hermes", "Hermes Chatter")],
-        ondelete={"hermes": "set default"},
+        selection_add=[("agent", "AI agent chatter")],
+        ondelete={"agent": "set default"},
     )
-    hermes_gateway_id = fields.Many2one(
-        "hermes.gateway",
-        string="Hermes Gateway",
-        help="Link this bridge to a specific Hermes gateway configuration.",
+    agent_id = fields.Many2one(
+        "ai.bridge.agent",
+        string="AI agent",
+        help="Link this bridge to a specific AI agent configuration.",
     )
 
-    def _prepare_payload_hermes(self, record=None, **kwargs):
-        """Prepare payload for Hermes gateway with conversation history."""
+    def _prepare_payload_agent(self, record=None, **kwargs):
+        """Prepare payload for AI agent with conversation history."""
         payload = self._prepare_payload_chatter(record=record, **kwargs)
 
         if record and record._name == "mail.message":
@@ -56,7 +56,7 @@ class AiBridge(models.Model):
         ]
 
     def _get_session_key(self, channel, payload):
-        """Generate a unique session key for Hermes."""
+        """Generate a unique session key for AI agent."""
         odoo_info = payload.get("_odoo", {})
         db_hash = odoo_info.get("db_hash", "unknown")
         return f"odoo:{db_hash}:channel_{channel.id}"

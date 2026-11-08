@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-Hermes Odoo Gateway - Standalone client with AIAgent integration.
+AI agent Odoo Agent - Standalone client with AIAgent integration.
 
 This script connects a running Hermes AIAgent to an Odoo instance
 with the ai_oca_bridge_agent module installed.
 
 Usage:
     # Standalone mode (for testing)
-    python hermes_odoo_gateway.py \
+    python agent_gateway_example.py \
         --odoo-url http://localhost:8069 \
         --webhook-token YOUR_TOKEN \
         --poll-interval 5
 
-    # With AIAgent (full Hermes with tools)
-    python hermes_odoo_gateway.py \
+    # With AIAgent (full AI agent with tools)
+    python agent_gateway_example.py \
         --odoo-url http://localhost:8069 \
         --webhook-token YOUR_TOKEN \
         --use-agent \
@@ -41,7 +41,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("hermes_odoo")
 
-# Load Hermes .env before anything else
+# Load AI agent .env before anything else
 HERMES_DOTENV = os.path.expanduser("~/.hermes/.env")
 if os.path.exists(HERMES_DOTENV):
     import dotenv
@@ -50,7 +50,7 @@ if os.path.exists(HERMES_DOTENV):
     dotenv.load_dotenv(HERMES_DOTENV, override=False)
     logger.debug(f"Loaded env from {HERMES_DOTENV}")
 
-# Add Hermes agent to path
+# Add Hermes Agent to path
 HERMES_AGENT_DIR = os.path.expanduser("~/.hermes/hermes-agent")
 if HERMES_AGENT_DIR not in sys.path:
     sys.path.insert(0, HERMES_AGENT_DIR)
@@ -69,7 +69,7 @@ def get_ai_agent(session_key: str, **kwargs):
         raise
 
     # Fix Kimi base URL: add /v1 suffix for OpenAI SDK compatibility
-    # (Hermes CLI uses Anthropic SDK which handles this differently)
+    # (AI agent CLI uses Anthropic SDK which handles this differently)
     base_url = os.environ.get("KIMI_BASE_URL", "")
     if base_url and base_url.rstrip("/").endswith("/coding"):
         os.environ["KIMI_BASE_URL"] = base_url.rstrip("/") + "/v1"
@@ -87,7 +87,7 @@ def get_ai_agent(session_key: str, **kwargs):
     agent = AIAgent(
         session_id=session_key,
         platform="odoo",
-        # Inherit model/provider from Hermes config if not specified
+        # Inherit model/provider from AI agent config if not specified
         model=kwargs.get("model", ""),
         provider=kwargs.get("provider", None),
         # Limit iterations for safety
@@ -140,11 +140,11 @@ class OdooGatewayClient:
     async def start(self):
         """Main polling loop."""
         self.running = True
-        logger.info(f"Starting Odoo gateway client for {self.odoo_url}")
+        logger.info(f"Starting Odoo agent client for {self.odoo_url}")
         logger.info(f"Polling every {self.poll_interval} seconds")
         if self._use_agent:
             logger.info(
-                "AIAgent mode enabled - Hermes will process messages with tools"
+                "AIAgent mode enabled - AI agent will process messages with tools"
             )
         else:
             logger.info(
@@ -164,11 +164,11 @@ class OdooGatewayClient:
     async def stop(self):
         """Stop the polling loop."""
         self.running = False
-        logger.info("Stopping Odoo gateway client")
+        logger.info("Stopping Odoo agent client")
 
     async def _poll_messages(self) -> list:
         """Fetch pending messages from Odoo."""
-        url = f"{self.odoo_url}/hermes/poll"
+        url = f"{self.odoo_url}/ai_agent/poll"
         headers = {"Authorization": f"Bearer {self.webhook_token}"}
 
         try:
@@ -260,7 +260,7 @@ class OdooGatewayClient:
 
     async def _send_response(self, channel_id: int, response: str, queue_id=None):
         """Send response back to Odoo channel."""
-        url = f"{self.odoo_url}/hermes/webhook/{self.webhook_token}"
+        url = f"{self.odoo_url}/ai_agent/webhook/{self.webhook_token}"
         payload = {
             "channel_id": channel_id,
             "body": response,
@@ -298,7 +298,7 @@ class OdooGatewayClient:
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="Hermes Odoo Gateway Client")
+    parser = argparse.ArgumentParser(description="AI agent Odoo Agent Client")
     parser.add_argument(
         "--odoo-url",
         default="http://localhost:8069",
@@ -307,7 +307,7 @@ async def main():
     parser.add_argument(
         "--webhook-token",
         required=True,
-        help="Webhook token from Odoo Hermes Gateway configuration",
+        help="Webhook token from Odoo AI agent configuration",
     )
     parser.add_argument(
         "--poll-interval",

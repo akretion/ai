@@ -14,7 +14,7 @@ METHOD_SELECTION = [
 ]
 
 
-class HermesTool(models.Model):
+class AiBridgeAgentTool(models.Model):
     """A whitelisted read access the assistant may use for a set of users.
 
     The whitelist is data, not code: an administrator can open a model to the
@@ -22,8 +22,8 @@ class HermesTool(models.Model):
     ever sees the tools bound to the groups they already belong to.
     """
 
-    _name = "hermes.tool"
-    _description = "Hermes tool allowed for the assistant"
+    _name = "ai.bridge.agent.tool"
+    _description = "AI agent tool allowed for the assistant"
     _order = "sequence, name"
 
     sequence = fields.Integer(default=10)
@@ -46,7 +46,7 @@ class HermesTool(models.Model):
     )
     allowed_group_ids = fields.Many2many(
         "res.groups",
-        "hermes_tool_group_rel",
+        "agent_tool_group_rel",
         "tool_id",
         "group_id",
         string="Allowed groups",
@@ -102,7 +102,7 @@ class HermesTool(models.Model):
             return False
 
     @api.model
-    def _open_access_grants(self, user, model_name, method, gateway):
+    def _open_access_grants(self, user, model_name, method, agent):
         """Trust the user's own API key: read whatever they may read."""
         if method not in READ_METHODS:
             return None
@@ -123,14 +123,12 @@ class HermesTool(models.Model):
         }
 
     @api.model
-    def _readable_models(self, user, gateway=None):
+    def _readable_models(self, user, agent=None):
         """Models the assistant may query for this user, for discovery."""
-        if gateway and gateway.tool_access_mode == "whitelist":
+        if agent and agent.tool_access_mode == "whitelist":
             names = self._for_user(user).mapped("model_name")
         else:
-            excluded = (
-                gateway.tool_excluded_model_ids.mapped("model") if gateway else []
-            )
+            excluded = agent.tool_excluded_model_ids.mapped("model") if agent else []
             names = []
             for model in self.env["ir.model"].sudo().search([]):
                 if model.model in excluded or model.model not in self.env:
@@ -140,8 +138,8 @@ class HermesTool(models.Model):
         return sorted(set(names))
 
     @api.model
-    def _resolve_for_user_model(self, user, model_name, method, gateway=None):
-        """Grant lookup by (model, method): how the gateway validates a call.
+    def _resolve_for_user_model(self, user, model_name, method, agent=None):
+        """Grant lookup by (model, method): how the agent validates a call.
 
         ``fields_get`` only exposes the schema Odoo already filters by access
         rights, and ``search_count`` only counts the rows the same grant already
@@ -150,7 +148,7 @@ class HermesTool(models.Model):
         assistant does not have to page through thousands of rows to answer
         "how many".
         """
-        if gateway and model_name in gateway.tool_excluded_model_ids.mapped("model"):
+        if agent and model_name in agent.tool_excluded_model_ids.mapped("model"):
             return None
         grants = self._for_user(user).filtered(
             lambda tool: tool.model_name == model_name and tool.method == method
@@ -163,10 +161,10 @@ class HermesTool(models.Model):
             tool = grants[:1]._as_tool_dict()
             tool["method"] = method
             return tool
-        mode = gateway.tool_access_mode if gateway else "open"
+        mode = agent.tool_access_mode if agent else "open"
         if mode != "open":
             return None
-        return self._open_access_grants(user, model_name, method, gateway)
+        return self._open_access_grants(user, model_name, method, agent)
 
     def _as_tool_dict(self):
         self.ensure_one()

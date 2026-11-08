@@ -23,8 +23,8 @@ class TestReplyEndpoint(HttpCase):
                 "groups_id": [(6, 0, [cls.env.ref("base.group_user").id])],
             }
         )
-        cls.gateway = cls.env["hermes.gateway"].create(
-            {"name": "Reply Gateway", "ai_user_id": cls.ai_user.id}
+        cls.agent = cls.env["ai.bridge.agent"].create(
+            {"name": "Reply Agent", "ai_user_id": cls.ai_user.id}
         )
         cls.channel = cls.env["discuss.channel"].create(
             {"name": "Reply channel", "channel_type": "channel"}
@@ -33,14 +33,14 @@ class TestReplyEndpoint(HttpCase):
     def _post_reply(self, payload):
         body = json.dumps(payload)
         timestamp = str(int(time.time()))
-        signature = self.gateway._compute_signature(timestamp, body)
+        signature = self.agent._compute_signature(timestamp, body)
         return self.url_open(
-            f"/hermes/webhook/{self.gateway.webhook_token}",
+            f"/ai_agent/webhook/{self.agent.webhook_token}",
             data=body,
             headers={
                 "Content-Type": "application/json",
-                "X-Hermes-Timestamp": timestamp,
-                "X-Hermes-Signature": f"sha256={signature}",
+                "X-AI-Agent-Timestamp": timestamp,
+                "X-AI-Agent-Signature": f"sha256={signature}",
             },
         )
 
@@ -60,7 +60,7 @@ class TestReplyEndpoint(HttpCase):
                 ],
             }
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 200, response.text)
         message = self.env["mail.message"].search(
             [("model", "=", "discuss.channel"), ("res_id", "=", self.channel.id)],
             order="id desc",

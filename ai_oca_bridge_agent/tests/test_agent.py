@@ -4,13 +4,13 @@
 from odoo.tests.common import TransactionCase
 
 
-class TestHermesGateway(TransactionCase):
+class TestAiBridgeAgent(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         cls.AiBridge = cls.env["ai.bridge"]
-        cls.HermesGateway = cls.env["hermes.gateway"]
-        cls.HermesQueue = cls.env["hermes.message.queue"]
+        cls.agents = cls.env["ai.bridge.agent"]
+        cls.messages = cls.env["ai.bridge.agent.message"]
         cls.DiscussChannel = cls.env["discuss.channel"]
         cls.ResUsers = cls.env["res.users"]
         cls.ResPartner = cls.env["res.partner"]
@@ -28,15 +28,15 @@ class TestHermesGateway(TransactionCase):
         cls.ai_bridge = cls.AiBridge.create(
             {
                 "name": "Test AI Bridge",
-                "usage": "hermes",
+                "usage": "agent",
             }
         )
         cls.ai_user.ai_bridge_id = cls.ai_bridge.id
 
-        # Create gateway
-        cls.gateway = cls.HermesGateway.create(
+        # Create agent
+        cls.agent = cls.agents.create(
             {
-                "name": "Test Gateway",
+                "name": "Test Agent",
                 "ai_user_id": cls.ai_user.id,
             }
         )
@@ -50,32 +50,32 @@ class TestHermesGateway(TransactionCase):
         )
 
     def test_gateway_creation(self):
-        """Test gateway is created with auto-generated token."""
-        self.assertTrue(self.gateway.webhook_token)
-        self.assertEqual(len(self.gateway.webhook_token), 64)  # 32 bytes hex
-        self.assertEqual(self.gateway.state, "draft")
+        """Test agent is created with auto-generated token."""
+        self.assertTrue(self.agent.webhook_token)
+        self.assertEqual(len(self.agent.webhook_token), 64)  # 32 bytes hex
+        self.assertEqual(self.agent.state, "draft")
 
     def test_gateway_regenerate_token(self):
         """Test token regeneration."""
-        old_token = self.gateway.webhook_token
-        self.gateway.action_regenerate_token()
-        self.assertNotEqual(self.gateway.webhook_token, old_token)
-        self.assertEqual(len(self.gateway.webhook_token), 64)
+        old_token = self.agent.webhook_token
+        self.agent.action_regenerate_token()
+        self.assertNotEqual(self.agent.webhook_token, old_token)
+        self.assertEqual(len(self.agent.webhook_token), 64)
 
     def test_gateway_test_connection_no_url(self):
-        """Test connection without Hermes URL shows warning."""
-        result = self.gateway.action_test_connection()
+        """Test connection without AI agent URL shows warning."""
+        result = self.agent.action_test_connection()
         self.assertEqual(result["type"], "ir.actions.client")
         self.assertEqual(result["tag"], "display_notification")
         self.assertEqual(result["params"]["type"], "warning")
 
     def test_queue_message_creation(self):
         """Test message queue creation."""
-        msg = self.HermesQueue.create(
+        msg = self.messages.create(
             {
                 "channel_id": self.channel.id,
                 "body": "<p>Test message</p>",
-                "gateway_id": self.gateway.id,
+                "agent_id": self.agent.id,
             }
         )
         self.assertEqual(msg.state, "pending")
@@ -84,11 +84,11 @@ class TestHermesGateway(TransactionCase):
 
     def test_queue_message_retry(self):
         """Test retrying failed messages."""
-        msg = self.HermesQueue.create(
+        msg = self.messages.create(
             {
                 "channel_id": self.channel.id,
                 "body": "<p>Test</p>",
-                "gateway_id": self.gateway.id,
+                "agent_id": self.agent.id,
                 "state": "error",
                 "error_message": "Test error",
             }
@@ -100,11 +100,11 @@ class TestHermesGateway(TransactionCase):
     def test_queue_cleanup_old_messages(self):
         """Test cleanup of old messages."""
         # Create old done message
-        old_msg = self.HermesQueue.create(
+        old_msg = self.messages.create(
             {
                 "channel_id": self.channel.id,
                 "body": "<p>Old</p>",
-                "gateway_id": self.gateway.id,
+                "agent_id": self.agent.id,
                 "state": "done",
             }
         )
@@ -112,33 +112,33 @@ class TestHermesGateway(TransactionCase):
         old_msg.write({"create_date": "2020-01-01 00:00:00"})
 
         # Run cleanup
-        self.HermesQueue._cleanup_old_messages()
+        self.messages._cleanup_old_messages()
 
         # Message should be deleted
         self.assertFalse(old_msg.exists())
 
     def test_discuss_channel_get_gateway(self):
-        """Test finding gateway for channel."""
-        # Channel without gateway
+        """Test finding agent for channel."""
+        # Channel without agent
         channel_no_gateway = self.DiscussChannel.create(
             {
-                "name": "No Gateway",
+                "name": "No Agent",
                 "channel_type": "channel",
             }
         )
-        self.assertFalse(channel_no_gateway._get_hermes_gateway())
+        self.assertFalse(channel_no_gateway._get_agent())
 
-        # Channel with explicit gateway
-        self.channel.hermes_gateway_id = self.gateway.id
-        found = self.channel._get_hermes_gateway()
-        self.assertEqual(found, self.gateway)
+        # Channel with explicit agent
+        self.channel.agent_id = self.agent.id
+        found = self.channel._get_agent()
+        self.assertEqual(found, self.agent)
 
     def test_discuss_channel_message_post_queues(self):
-        """Test that posting a message queues it for Hermes."""
-        self.channel.hermes_gateway_id = self.gateway.id
+        """Test that posting a message queues it for AI agent."""
+        self.channel.agent_id = self.agent.id
         human = self.ResUsers.create(
             {
-                "name": "Gateway Human",
+                "name": "Agent Human",
                 "login": "gateway_human",
                 "groups_id": [
                     (
@@ -155,12 +155,12 @@ class TestHermesGateway(TransactionCase):
 
         # Post as regular user
         self.channel.with_user(human).message_post(
-            body="<p>Hello Hermes</p>",
+            body="<p>Hello AI agent</p>",
             message_type="comment",
         )
 
         # Check queue - search by channel only since body might be wrapped
-        queued = self.HermesQueue.search(
+        queued = self.messages.search(
             [
                 ("channel_id", "=", self.channel.id),
             ]
@@ -170,7 +170,7 @@ class TestHermesGateway(TransactionCase):
 
     def test_discuss_channel_ai_user_message_no_queue(self):
         """Test that AI user messages don't get queued (prevent loops)."""
-        self.channel.hermes_gateway_id = self.gateway.id
+        self.channel.agent_id = self.agent.id
 
         # Post as AI user
         self.channel.with_user(self.ai_user.id).message_post(
@@ -179,7 +179,7 @@ class TestHermesGateway(TransactionCase):
         )
 
         # Should not be queued
-        queued = self.HermesQueue.search(
+        queued = self.messages.search(
             [
                 ("channel_id", "=", self.channel.id),
                 ("body", "=", "<p>AI response</p>"),
@@ -189,15 +189,15 @@ class TestHermesGateway(TransactionCase):
 
     def test_discuss_channel_auto_respect_disabled(self):
         """Test that auto-respect disabled prevents queuing."""
-        self.channel.hermes_gateway_id = self.gateway.id
-        self.channel.hermes_auto_respond = False
+        self.channel.agent_id = self.agent.id
+        self.channel.agent_auto_respond = False
 
         self.channel.message_post(
             body="<p>Should not queue</p>",
             message_type="comment",
         )
 
-        queued = self.HermesQueue.search(
+        queued = self.messages.search(
             [
                 ("channel_id", "=", self.channel.id),
                 ("body", "=", "<p>Should not queue</p>"),
@@ -207,9 +207,9 @@ class TestHermesGateway(TransactionCase):
 
     def test_webhook_format_body(self):
         """Plain text is wrapped and its URLs become links."""
-        from ..controllers.hermes_webhook import HermesWebhook
+        from ..controllers.agent_webhook import AgentWebhook
 
-        webhook = HermesWebhook()
+        webhook = AgentWebhook()
 
         result = str(webhook._format_body("Hello world"))
         self.assertIn("Hello world", result)
@@ -229,13 +229,13 @@ class TestHermesGateway(TransactionCase):
 
     def test_poll_claiming_is_delegated(self):
         """The poll endpoint relies on the atomic claim of the queue."""
-        message = self.HermesQueue.create(
+        message = self.messages.create(
             {
                 "channel_id": self.channel.id,
                 "body": "<p>poll me</p>",
-                "gateway_id": self.gateway.id,
+                "agent_id": self.agent.id,
             }
         )
-        claimed = self.HermesQueue._claim_batch(self.gateway)
+        claimed = self.messages._claim_batch(self.agent)
         self.assertEqual(claimed, message)
         self.assertEqual(message.state, "processing")

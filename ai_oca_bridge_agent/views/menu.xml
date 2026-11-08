@@ -3,16 +3,16 @@
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
 <odoo>
     <menuitem
-        id="menu_hermes_root"
-        name="Hermes"
+        id="menu_agent_root"
+        name="AI agent"
         parent="ai_oca_bridge.ai_bridge_root_menu"
         sequence="20"
     />
     <menuitem
-        id="menu_hermes_gateway"
-        name="Gateways"
-        parent="menu_hermes_root"
-        action="hermes_gateway_action"
+        id="menu_agent"
+        name="Agents"
+        parent="menu_agent_root"
+        action="agent_action"
         sequence="10"
     />
 </odoo>

@@ -402,7 +402,7 @@ the assistant, what it may read or create, and the audit trail.</p>
 <li><strong>Push (recommended)</strong>: Odoo signs an event with an HMAC secret and
 posts it to the responder the moment a message is committed. Latency
 is one HTTP call, and no Odoo worker is ever held waiting.</li>
-<li><strong>Polling (fallback)</strong>: the responder calls <tt class="docutils literal">/hermes/poll</tt> and
+<li><strong>Polling (fallback)</strong>: the responder calls <tt class="docutils literal">/ai_agent/poll</tt> and
 <em>claims</em> the pending messages atomically. Works through any firewall,
 no inbound route needed on the Odoo side, but costs one request per
 interval per tenant.</li>
@@ -429,7 +429,7 @@ the message it answers, not every message of the channel.</li>
 </div>
 <div class="section" id="who-may-talk-to-the-assistant">
 <h2>Who may talk to the assistant</h2>
-<p>Access is a group (<tt class="docutils literal">Use the AI assistant</tt>), configurable per gateway.
+<p>Access is a group (<tt class="docutils literal">Use the AI assistant</tt>), configurable per agent.
 System administrators always keep access so a fresh install stays
 configurable. Someone outside the allowed groups who addresses the
 assistant receives a configurable standard answer, posted at most once
@@ -492,31 +492,31 @@ daily.</p>
 <p>Polling was the original design: it works behind firewalls and needs no
 inbound route on the Odoo side. It stays as the <strong>fallback</strong>, but it
 does not scale to many tenants (one request per interval per tenant, a
-delayed answer, and a gateway that has to hold the conversation state
+delayed answer, and a agent that has to hold the conversation state
 between two polls).</p>
 <p>The recommended transport is <strong>outbound push</strong>: Odoo signs the event and
 posts it as soon as the transaction is committed (<tt class="docutils literal">cr.postcommit</tt>), so
-the gateway never sees a message the database could still roll back. A
+the agent never sees a message the database could still roll back. A
 one-minute cron pushes whatever the post-commit hook could not send,
-which makes a gateway restart or a network glitch invisible to the user.</p>
+which makes a agent restart or a network glitch invisible to the user.</p>
 <p>Both transports carry the same JSON envelope (see <tt class="docutils literal">USAGE.md</tt>), so the
-gateway only has to implement one parser.</p>
-<p><strong>Stateless gateway, persistent session per user</strong></p>
-<p>The gateway keeps <strong>no</strong> conversation state in Odoo: it authenticates
-with a tenant key, reads the session key from the envelope, and answers
-with a <tt class="docutils literal">delivery_id</tt>. The Hermes session itself is persistent
+agent only has to implement one parser.</p>
+<p><strong>Stateless agent, persistent session per user</strong></p>
+<p>The agent keeps <strong>no</strong> conversation state in Odoo: it authenticates with
+a tenant key, reads the session key from the envelope, and answers with
+a <tt class="docutils literal">delivery_id</tt>. The Hermes session itself is persistent
 (<tt class="docutils literal">session_scope</tt>: per user by default, per channel optionally), which
 is what gives the assistant a memory across messages without storing a
 transcript in Odoo.</p>
 <p><strong>Atomic claiming</strong></p>
-<p><tt class="docutils literal">/hermes/poll</tt> claims messages with a single
+<p><tt class="docutils literal">/ai_agent/poll</tt> claims messages with a single
 <tt class="docutils literal">UPDATE ... FOR UPDATE SKIP LOCKED ... RETURNING</tt>. This is what makes
-several gateway workers and several Odoo HTTP workers safe together, and
-it removes the previous per-gateway one-second throttle that capped
-every tenant of a database.</p>
-<p><strong>Standalone gateway</strong></p>
-<p><tt class="docutils literal">scripts/hermes_odoo_gateway.py</tt> polls in echo mode or with a Hermes
-AIAgent. <tt class="docutils literal">scripts/hermes_push_server.py</tt> is the reference push
+several agent workers and several Odoo HTTP workers safe together, and
+it removes the previous per-agent one-second throttle that capped every
+tenant of a database.</p>
+<p><strong>Standalone agent</strong></p>
+<p><tt class="docutils literal">scripts/agent_gateway_example.py</tt> polls in echo mode or with a Hermes
+AIAgent. <tt class="docutils literal">scripts/ai_agent_push_server.py</tt> is the reference push
 receiver: it verifies the HMAC signature, answers, and is the place to
 plug the agent call. Neither needs to run inside Odoo’s Python
 environment.</p>
@@ -524,19 +524,19 @@ environment.</p>
 <p>The module is intentionally minimal. Child modules can extend, without
 forking:</p>
 <ul class="simple">
-<li><tt class="docutils literal">hermes.gateway._is_user_allowed(user)</tt> — who may talk to the
+<li><tt class="docutils literal">ai.bridge.agent._is_user_allowed(user)</tt> — who may talk to the
 assistant;</li>
-<li><tt class="docutils literal">hermes.gateway._get_capabilities(message)</tt> — what the gateway may
-do for that user (<tt class="docutils literal">full</tt>/<tt class="docutils literal">basic</tt>, <tt class="docutils literal">odoo_rpc</tt>, tool list);</li>
-<li><tt class="docutils literal">hermes.gateway._build_event_payload(message)</tt> — enrich the envelope
-with business context;</li>
-<li><tt class="docutils literal">hermes.gateway._get_session_key(user, channel)</tt> — session
+<li><tt class="docutils literal">ai.bridge.agent._get_capabilities(message)</tt> — what the agent may do
+for that user (<tt class="docutils literal">full</tt>/<tt class="docutils literal">basic</tt>, <tt class="docutils literal">odoo_rpc</tt>, tool list);</li>
+<li><tt class="docutils literal">ai.bridge.agent._build_event_payload(message)</tt> — enrich the
+envelope with business context;</li>
+<li><tt class="docutils literal">ai.bridge.agent._get_session_key(user, channel)</tt> — session
 granularity;</li>
-<li><tt class="docutils literal">hermes.message.queue._get_history(limit)</tt> — what the assistant sees
-of the conversation;</li>
-<li><tt class="docutils literal">discuss.channel._should_queue_for_hermes(message, gateway)</tt> —
-routing rules;</li>
-<li><tt class="docutils literal">hermes_webhook._action_escalate(gateway, data)</tt> — escalation
+<li><tt class="docutils literal">ai.bridge.agent.message._get_history(limit)</tt> — what the assistant
+sees of the conversation;</li>
+<li><tt class="docutils literal">discuss.channel._should_queue_for_agent(message, agent)</tt> — routing
+rules;</li>
+<li><tt class="docutils literal">ai_agent_webhook._action_escalate(agent, data)</tt> — escalation
 backend.</li>
 </ul>
 <p><strong>The AGPL boundary (read this before adding private logic)</strong></p>
@@ -548,7 +548,7 @@ the private value of the product must <strong>not</strong> live in an Odoo modul
 <li>keep in Odoo only the transport, the traceability and the coarse
 access policy that you are happy to publish;</li>
 <li>keep prompts, skills, tool whitelists, model/provider choice, tenant
-registry, quotas, billing and routing intelligence in the <strong>gateway
+registry, quotas, billing and routing intelligence in the <strong>agent
 process</strong>, which talks to Odoo over the documented HTTP envelope;</li>
 <li>if a private Odoo child module is really needed, accept that it is
 AGPL too (that is fine for internal, non-distributed deployments, but
@@ -570,18 +570,18 @@ constant time and never trusted from the URL alone: the recommended
 endpoints authenticate with an HMAC signature over
 <tt class="docutils literal"><span class="pre">&lt;timestamp&gt;.&lt;body&gt;</span></tt>;</li>
 <li>AI users are regular Odoo users with limited permissions;</li>
-<li>the gateway runs with its own credentials and, per user, with that
+<li>the agent runs with its own credentials and, per user, with that
 user’s API key when there is one;</li>
 <li>queue rows are protected by a multi-company rule and by an
 own-messages-only rule for non-managers;</li>
-<li>the Odoo side never executes code sent by the gateway.</li>
+<li>the Odoo side never executes code sent by the agent.</li>
 </ul>
 <div class="section" id="configuration">
 <h3>Configuration</h3>
 </div>
 </div>
-<div class="section" id="gateway-settings">
-<h2>Gateway settings</h2>
+<div class="section" id="agent-settings">
+<h2>Agent settings</h2>
 <table border="1" class="docutils">
 <colgroup>
 <col width="29%" />
@@ -631,8 +631,8 @@ for users owning an API key.</td>
 <tr><td>Tenant key</td>
 <td>generated</td>
 <td>Stable database identifier
-shared by every gateway of
-the database. Do not edit.</td>
+shared by every agent of the
+database. Do not edit.</td>
 </tr>
 <tr><td>Environment</td>
 <td>prod</td>
@@ -684,8 +684,8 @@ message becomes <tt class="docutils literal">dead</tt>.</td>
 <tr><td>Long poll timeout</td>
 <td>0</td>
 <td>Up to 20 s of long polling on
-<tt class="docutils literal">/hermes/poll</tt>. 0 disables
-it.</td>
+<tt class="docutils literal">/ai_agent/poll</tt>. 0
+disables it.</td>
 </tr>
 <tr><td>Allow users to
 connect</td>
@@ -722,9 +722,9 @@ be quoted in a channel.</td>
 <h2>Recommended presets</h2>
 <ul class="simple">
 <li><strong>Single customer, behind a firewall</strong>: push disabled, long poll 20 s,
-one gateway worker. Nothing has to reach Odoo from outside.</li>
+one agent worker. Nothing has to reach Odoo from outside.</li>
 <li><strong>Akretion-style shared Hermes</strong>: push enabled over HTTPS, HMAC secret
-per tenant, <tt class="docutils literal">environment</tt> set per database, one gateway worker per
+per tenant, <tt class="docutils literal">environment</tt> set per database, one agent worker per
 tenant queue.</li>
 <li><strong>Pilot with power users only</strong>: allowed groups = a dedicated group,
 API key required for tools, session scope per user.</li>
@@ -739,19 +739,19 @@ API key required for tools, session scope per user.</li>
 <li>Create the AI user: a regular Odoo user, member of no group of its
 own, linked to an <tt class="docutils literal">ai.bridge</tt> with usage <em>Hermes</em> (this is what
 makes Discuss treat it as an assistant).</li>
-<li>Go to <em>AI Bridge &gt; Hermes &gt; Gateways</em> and create a gateway: name, AI
+<li>Go to <em>AI Bridge &gt; Hermes &gt; Agents</em> and create a agent: name, AI
 user, environment (<tt class="docutils literal">prod</tt>/<tt class="docutils literal">staging</tt>/<tt class="docutils literal">dev</tt>) and the groups
 allowed to chat with it. System administrators always keep access.</li>
 <li>Copy the <strong>webhook token</strong> for the polling transport, and the <strong>HMAC
 secret</strong> (<tt class="docutils literal">push_secret</tt>) for the push transport. Both are shown to
 system administrators only.</li>
-<li>Optional: restrict the gateway to specific channels, otherwise every
+<li>Optional: restrict the agent to specific channels, otherwise every
 channel the AI user belongs to is monitored, and group channels
 answer only when the assistant is mentioned.</li>
 </ol>
 <p><strong>Real-time push (recommended)</strong></p>
-<p>In the <em>Realtime push</em> section, check <strong>Push enabled</strong> and set the
-gateway URL, e.g. <tt class="docutils literal"><span class="pre">https://hermes.example.com/odoo/events</span></tt>. Odoo then
+<p>In the <em>Realtime push</em> section, check <strong>Push enabled</strong> and set the agent
+URL, e.g. <tt class="docutils literal"><span class="pre">https://responder.example.com/ai_agent/events</span></tt>. Odoo then
 posts every new message after the transaction commits, signed with:</p>
 <pre class="literal-block">
 X-Hermes-Tenant:    &lt;tenant_key&gt;
@@ -760,52 +760,52 @@ X-Hermes-Delivery:  &lt;uuid&gt;
 X-Hermes-Signature: sha256=&lt;hmac_sha256(push_secret, &quot;&lt;timestamp&gt;.&lt;raw body&gt;&quot;)&gt;
 </pre>
 <p>A one-minute cron retries whatever the post-commit hook could not
-deliver, so a gateway restart does not lose a message. Leaving push
+deliver, so a agent restart does not lose a message. Leaving push
 disabled keeps the polling transport in charge.</p>
 <p><strong>Polling (fallback)</strong></p>
 <pre class="code bash literal-block">
-python<span class="w"> </span>scripts/hermes_odoo_gateway.py<span class="w"> </span><span class="se">\
+python<span class="w"> </span>scripts/agent_gateway_example.py<span class="w"> </span><span class="se">\
 </span><span class="w">    </span>--odoo-url<span class="w"> </span>https://odoo.example.com<span class="w"> </span><span class="se">\
 </span><span class="w">    </span>--webhook-token<span class="w"> </span>YOUR_TOKEN<span class="w"> </span><span class="se">\
 </span><span class="w">    </span>--poll-interval<span class="w"> </span><span class="m">5</span>
 </pre>
 <p>Add <tt class="docutils literal"><span class="pre">--use-agent</span> <span class="pre">--model</span> ... <span class="pre">--provider</span> ...</tt> to answer with a Hermes
-AIAgent instead of echo mode. Set <strong>Long poll timeout</strong> on the gateway
+AIAgent instead of echo mode. Set <strong>Long poll timeout</strong> on the agent
 (0-20 s) to hold the request until a message arrives instead of paying a
 fixed interval.</p>
 <p><strong>Reference push receiver</strong></p>
 <pre class="code bash literal-block">
-python<span class="w"> </span>scripts/hermes_push_server.py<span class="w"> </span><span class="se">\
+python<span class="w"> </span>scripts/ai_agent_push_server.py<span class="w"> </span><span class="se">\
 </span><span class="w">    </span>--port<span class="w"> </span><span class="m">8770</span><span class="w"> </span><span class="se">\
 </span><span class="w">    </span>--odoo-url<span class="w"> </span>https://odoo.example.com<span class="w"> </span><span class="se">\
 </span><span class="w">    </span>--tenant<span class="w"> </span>&lt;tenant_key&gt;<span class="w"> </span><span class="se">\
 </span><span class="w">    </span>--secret<span class="w"> </span>&lt;push_secret&gt;<span class="w"> </span><span class="se">\
 </span><span class="w">    </span>--mode<span class="w"> </span><span class="nb">echo</span>
 </pre>
-<p>It verifies the signature, answers <tt class="docutils literal">/hermes/reply</tt> with the same HMAC
-scheme and is the place to plug the agent call (<tt class="docutils literal">build_answer</tt>).</p>
+<p>It verifies the signature, answers <tt class="docutils literal">/ai_agent/reply</tt> with the same
+HMAC scheme and is the place to plug the agent call (<tt class="docutils literal">build_answer</tt>).</p>
 </div>
 <div class="section" id="access-control">
 <h2>Access control</h2>
 <p>Users outside the allowed groups are answered with a standard message
-(configurable per gateway, <em>Access denied message</em>), posted at most once
+(configurable per agent, <em>Access denied message</em>), posted at most once
 per <tt class="docutils literal">denial_cooldown_minutes</tt> per channel. Administrators are always
 allowed.</p>
 </div>
 <div class="section" id="two-capability-tiers">
 <h2>Two capability tiers</h2>
-<p>The envelope announces what the gateway may do for the user:</p>
+<p>The envelope announces what the agent may do for the user:</p>
 <ul class="simple">
 <li><tt class="docutils literal">tier: &quot;full&quot;</tt>, <tt class="docutils literal">odoo_rpc: true</tt> — the user owns an Odoo API key,
-so the gateway can call Odoo with that user’s rights (ACL and record
+so the agent can call Odoo with that user’s rights (ACL and record
 rules included);</li>
 <li><tt class="docutils literal">tier: &quot;basic&quot;</tt>, <tt class="docutils literal">odoo_rpc: false</tt> — no API key: the assistant
 answers generically and does not read business data.</li>
 </ul>
 <p>Uncheck <em>Require an Odoo API key for tools</em> to announce
-<tt class="docutils literal">odoo_rpc: true</tt> for everyone (the gateway then uses its own service
+<tt class="docutils literal">odoo_rpc: true</tt> for everyone (the agent then uses its own service
 account, which is a deployment decision, not an Odoo one).</p>
-<p>In both cases the gateway must never receive more rights than the user:
+<p>In both cases the agent must never receive more rights than the user:
 the API key is the user’s own, and the module only reports whether it
 exists.</p>
 </div>
@@ -813,9 +813,9 @@ exists.</p>
 <h2>Protocol summary</h2>
 <table border="1" class="docutils">
 <colgroup>
-<col width="24%" />
-<col width="38%" />
-<col width="38%" />
+<col width="23%" />
+<col width="39%" />
+<col width="37%" />
 </colgroup>
 <thead valign="bottom">
 <tr><th class="head">Direction</th>
@@ -824,27 +824,27 @@ exists.</p>
 </tr>
 </thead>
 <tbody valign="top">
-<tr><td>Odoo -&gt; gateway</td>
+<tr><td>Odoo -&gt; agent</td>
 <td><tt class="docutils literal">POST {push_url}</tt>
 (<tt class="docutils literal">/odoo/events</tt> by convention)</td>
 <td>HMAC headers</td>
 </tr>
-<tr><td>gateway -&gt; Odoo</td>
-<td><tt class="docutils literal">POST /hermes/reply</tt></td>
+<tr><td>agent -&gt; Odoo</td>
+<td><tt class="docutils literal">POST /ai_agent/reply</tt></td>
 <td>HMAC headers</td>
 </tr>
-<tr><td>gateway -&gt; Odoo</td>
-<td><tt class="docutils literal">POST /hermes/poll</tt></td>
+<tr><td>agent -&gt; Odoo</td>
+<td><tt class="docutils literal">POST /ai_agent/poll</tt></td>
 <td><tt class="docutils literal">Authorization: Bearer &lt;token&gt;</tt></td>
 </tr>
-<tr><td>gateway -&gt; Odoo
+<tr><td>agent -&gt; Odoo
 (legacy)</td>
-<td><tt class="docutils literal">POST <span class="pre">/hermes/webhook/&lt;token&gt;</span></tt>,
-<tt class="docutils literal"><span class="pre">/hermes/push/&lt;token&gt;</span></tt></td>
+<td><tt class="docutils literal">POST <span class="pre">/ai_agent/webhook/&lt;token&gt;</span></tt>,
+<tt class="docutils literal"><span class="pre">/ai_agent/push/&lt;token&gt;</span></tt></td>
 <td>token in path</td>
 </tr>
-<tr><td>gateway -&gt; Odoo</td>
-<td><tt class="docutils literal">POST <span class="pre">/hermes/notify/&lt;token&gt;</span></tt></td>
+<tr><td>agent -&gt; Odoo</td>
+<td><tt class="docutils literal">POST <span class="pre">/ai_agent/notify/&lt;token&gt;</span></tt></td>
 <td>token in path</td>
 </tr>
 </tbody>
@@ -868,11 +868,11 @@ flight in one channel cannot swallow each other.</p>
 <p>A user can hand their own API key to the assistant, so answers can be
 based on records <strong>that user</strong> is allowed to see:</p>
 <ol class="arabic simple">
-<li>The administrator enables <strong>Allow users to connect</strong> on the gateway.</li>
+<li>The administrator enables <strong>Allow users to connect</strong> on the agent.</li>
 <li>The user opens <strong>Preferences → Hermes AI</strong> and clicks <strong>Connect
 Hermes</strong>. Odoo creates an API key in that user’s own name (scope
-<tt class="docutils literal">rpc</tt>) and leaves it in a one-shot hand-off for the gateway.</li>
-<li>The gateway collects it on <tt class="docutils literal">/hermes/credentials</tt>, stores it
+<tt class="docutils literal">rpc</tt>) and leaves it in a one-shot hand-off for the agent.</li>
+<li>The agent collects it on <tt class="docutils literal">/ai_agent/credentials</tt>, stores it
 encrypted on its side, checks it with a real RPC call, and wipes the
 plaintext in Odoo.</li>
 <li><strong>Disconnect</strong> revokes the key immediately; otherwise it expires
@@ -883,14 +883,14 @@ key is the user’s own, the assistant inherits exactly that user’s access
 rights and record rules: it cannot read what the user cannot read, and
 the key can be revoked from the same screen.</p>
 <p>Note: Odoo stores API keys hashed, so a key cannot be read back later.
-The hand-off is therefore one-shot: if the gateway loses it, the user
+The hand-off is therefore one-shot: if the agent loses it, the user
 reconnects.</p>
 </div>
 <div class="section" id="letting-the-assistant-use-odoo-tools">
 <h2>Letting the assistant use Odoo tools</h2>
 <p>A connected user can also let the assistant <em>query</em> Odoo. The default
 policy is <strong>Any model the user may read</strong> (<tt class="docutils literal">tool_access_mode</tt> on the
-gateway): the assistant inherits the user’s own API key, so it can read
+agent): the assistant inherits the user’s own API key, so it can read
 exactly what that user can read in the interface, and nothing else. Read
 methods only (<tt class="docutils literal">search_read</tt>, <tt class="docutils literal">read</tt>, <tt class="docutils literal">fields_get</tt>,
 <tt class="docutils literal">search_count</tt>, <tt class="docutils literal">read_group</tt>); no write is exposed yet.</p>
@@ -908,7 +908,7 @@ answer is posted in Discuss where other members read it, so a customer
 may keep payroll or contracts out of the assistant even though the
 user could open them.</li>
 </ul>
-<p>The gateway checks every call with Odoo before running it and uses the
+<p>The agent checks every call with Odoo before running it and uses the
 user’s own key, so a cached tool list or a prompt injection cannot widen
 either mode. <tt class="docutils literal">odoo_models</tt> lets the assistant discover what it may
 query instead of guessing.</p>
@@ -957,12 +957,12 @@ an arbitrary server file by naming it.</p>
 <div class="section" id="troubleshooting">
 <h2>Troubleshooting</h2>
 <ul class="simple">
-<li><em>Queue rows stay pending</em>: the gateway is not polling and push is
+<li><em>Queue rows stay pending</em>: the agent is not polling and push is
 disabled or failing — check <tt class="docutils literal">last_error</tt>/<tt class="docutils literal">last_error_date</tt> on the
-gateway, and <tt class="docutils literal">pending_count</tt> for the queue depth.</li>
-<li><em>``dead`` state</em>: <tt class="docutils literal">max_attempts</tt> reached. Fix the gateway, then use
+agent, and <tt class="docutils literal">pending_count</tt> for the queue depth.</li>
+<li><em>``dead`` state</em>: <tt class="docutils literal">max_attempts</tt> reached. Fix the agent, then use
 <strong>Retry</strong> on the queue rows.</li>
-<li><em>Signature rejected</em>: the gateway clock is more than 5 minutes off, or
+<li><em>Signature rejected</em>: the agent clock is more than 5 minutes off, or
 the secret does not match the one in Odoo.</li>
 </ul>
 <div class="section" id="known-issues-roadmap">
@@ -972,16 +972,16 @@ the secret does not match the one in Odoo.</li>
 confirmation in Discuss, on top of the read-only tools already shipped</li>
 <li>Multi-tenant routing: a shared Hermes instance serving several Odoo
 databases, one profile per tenant</li>
-<li>Per-tenant quotas and usage metering (in a child module or the
-gateway, never in the transport)</li>
+<li>Per-tenant quotas and usage metering (in a child module or the agent,
+never in the transport)</li>
 <li>Support for file attachments and images</li>
 <li>Voice message integration</li>
 <li>Interactive approval buttons in Discuss messages (e.g.
 “Approve/Reject” actions for sensitive operations) — nice to have for
 escalation workflows</li>
 <li>Native Hermes platform adapter (<tt class="docutils literal"><span class="pre">platform=&quot;odoo&quot;</span></tt>) consuming the
-push envelope directly, without a separate gateway script</li>
-<li>WebSocket transport for browsers that cannot reach the gateway</li>
+push envelope directly, without a separate agent script</li>
+<li>WebSocket transport for browsers that cannot reach the agent</li>
 </ul>
 </div>
 <div class="section" id="bug-tracker">

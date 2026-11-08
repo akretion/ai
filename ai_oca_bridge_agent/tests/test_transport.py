@@ -7,16 +7,16 @@ from unittest.mock import Mock, patch
 from odoo.tests.common import TransactionCase
 
 
-class TestHermesTransport(TransactionCase):
+class TestAgentTransport(TransactionCase):
     """Queueing, access control, payload and push delivery."""
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.Queue = cls.env["hermes.message.queue"]
+        cls.Queue = cls.env["ai.bridge.agent.message"]
         cls.Channel = cls.env["discuss.channel"]
         cls.ResUsers = cls.env["res.users"]
-        cls.HermesGateway = cls.env["hermes.gateway"]
+        cls.agents = cls.env["ai.bridge.agent"]
         cls.Partner = cls.env["res.partner"]
 
         ai_partner = cls.Partner.create({"name": "Transport AI"})
@@ -28,17 +28,17 @@ class TestHermesTransport(TransactionCase):
             }
         )
         cls.ai_bridge = cls.env["ai.bridge"].create(
-            {"name": "Transport Bridge", "usage": "hermes"}
+            {"name": "Transport Bridge", "usage": "agent"}
         )
         cls.ai_user.ai_bridge_id = cls.ai_bridge.id
 
-        cls.gateway = cls.HermesGateway.create(
+        cls.agent = cls.agents.create(
             {"name": "Transport Tenant", "ai_user_id": cls.ai_user.id}
         )
         cls.human = cls.ResUsers.create(
             {
-                "name": "Hermes Human",
-                "login": "hermes_human",
+                "name": "AI agent Human",
+                "login": "agent_human",
                 "groups_id": [
                     (
                         6,
@@ -55,7 +55,7 @@ class TestHermesTransport(TransactionCase):
             {
                 "name": "Transport Channel",
                 "channel_type": "channel",
-                "hermes_gateway_id": cls.gateway.id,
+                "agent_id": cls.agent.id,
             }
         )
         cls.env["discuss.channel.member"].create(
@@ -86,9 +86,9 @@ class TestHermesTransport(TransactionCase):
         self.assertEqual(queued.body_text, "hello")
 
     def test_user_outside_group_gets_standard_answer(self):
-        user = self.ResUsers.create({"name": "No Hermes", "login": "no_hermes_user"})
+        user = self.ResUsers.create({"name": "No agent", "login": "no_agent_user"})
         self._add_member(user)
-        self._post(body="<p>hi Hermes</p>", user=user)
+        self._post(body="<p>hi AI agent</p>", user=user)
         self.assertFalse(self._queued())
         answer = self.env["mail.message"].search(
             [
@@ -104,7 +104,7 @@ class TestHermesTransport(TransactionCase):
 
     def test_access_denied_answer_is_not_repeated(self):
         user = self.ResUsers.create(
-            {"name": "No Hermes bis", "login": "no_hermes_user_bis"}
+            {"name": "No agent bis", "login": "no_agent_user_bis"}
         )
         self._add_member(user)
         self._post(body="<p>first</p>", user=user)
@@ -119,9 +119,9 @@ class TestHermesTransport(TransactionCase):
         self.assertEqual(len(answers), 1)
 
     def test_gateway_can_use_custom_denial_message(self):
-        self.gateway.access_denied_message = "Ask the admin for access."
+        self.agent.access_denied_message = "Ask the admin for access."
         user = self.ResUsers.create(
-            {"name": "No Hermes ter", "login": "no_hermes_user_ter"}
+            {"name": "No agent ter", "login": "no_agent_user_ter"}
         )
         self._add_member(user)
         self._post(body="<p>hi</p>", user=user)
@@ -139,8 +139,8 @@ class TestHermesTransport(TransactionCase):
     def test_group_member_is_allowed(self):
         user = self.ResUsers.create(
             {
-                "name": "Hermes User",
-                "login": "hermes_group_user",
+                "name": "AI agent User",
+                "login": "agent_group_user",
                 "groups_id": [
                     (
                         6,
@@ -154,7 +154,7 @@ class TestHermesTransport(TransactionCase):
             }
         )
         self._add_member(user)
-        self._post(body="<p>hi Hermes</p>", user=user)
+        self._post(body="<p>hi AI agent</p>", user=user)
         queued = self._queued()
         self.assertEqual(len(queued), 1)
         self.assertEqual(queued.user_id, user)
@@ -162,62 +162,62 @@ class TestHermesTransport(TransactionCase):
     def test_payload_describes_tenant_and_capabilities(self):
         self._post()
         queued = self._queued()
-        payload = self.gateway._build_event_payload(queued)
-        self.assertEqual(payload["tenant"]["key"], self.gateway.tenant_key)
+        payload = self.agent._build_event_payload(queued)
+        self.assertEqual(payload["tenant"]["key"], self.agent.tenant_key)
         self.assertEqual(payload["tenant"]["environment"], "prod")
         self.assertEqual(payload["event"], "message.created")
         self.assertEqual(payload["session_key"], queued.session_key)
         self.assertEqual(payload["message"]["queue_id"], queued.id)
         self.assertEqual(payload["message"]["body_text"], "hello")
         self.assertIn("tier", payload["capabilities"])
-        self.assertTrue(payload["reply_to"]["url"].endswith("/hermes/reply"))
+        self.assertTrue(payload["reply_to"]["url"].endswith("/ai_agent/reply"))
 
     def test_capabilities_follow_api_key_presence(self):
         self._post()
         queued = self._queued()
         queued.user_has_api_key = True
-        self.assertEqual(self.gateway._get_capabilities(queued)["tier"], "full")
+        self.assertEqual(self.agent._get_capabilities(queued)["tier"], "full")
         queued.user_has_api_key = False
-        capabilities = self.gateway._get_capabilities(queued)
+        capabilities = self.agent._get_capabilities(queued)
         self.assertEqual(capabilities["tier"], "basic")
         self.assertFalse(capabilities["odoo_rpc"])
-        self.gateway.require_api_key_for_tools = False
-        self.assertTrue(self.gateway._get_capabilities(queued)["odoo_rpc"])
+        self.agent.require_api_key_for_tools = False
+        self.assertTrue(self.agent._get_capabilities(queued)["odoo_rpc"])
 
     def test_push_sends_signed_event(self):
-        self.gateway.write(
-            {"push_enabled": True, "push_url": "http://hermes.test/odoo/events"}
+        self.agent.write(
+            {"push_enabled": True, "push_url": "http://responder.test/ai_agent/events"}
         )
         self._post()
         queued = self._queued()
         response = Mock(status_code=202, text="")
         with patch("requests.post", return_value=response) as post:
-            pushed = self.gateway._push_message(queued)
+            pushed = self.agent._push_message(queued)
         self.assertTrue(pushed)
         self.assertEqual(queued.state, "pushed")
         headers = post.call_args.kwargs["headers"]
-        self.assertEqual(headers["X-Hermes-Tenant"], self.gateway.tenant_key)
-        self.assertTrue(headers["X-Hermes-Signature"].startswith("sha256="))
+        self.assertEqual(headers["X-AI-Agent-Tenant"], self.agent.tenant_key)
+        self.assertTrue(headers["X-AI-Agent-Signature"].startswith("sha256="))
         body = json.loads(post.call_args.kwargs["data"].decode())
         self.assertEqual(body["delivery_id"], queued.delivery_id)
-        self.assertTrue(self.gateway.last_push)
+        self.assertTrue(self.agent.last_push)
 
     def test_push_failure_schedules_a_retry(self):
-        self.gateway.write(
-            {"push_enabled": True, "push_url": "http://hermes.test/odoo/events"}
+        self.agent.write(
+            {"push_enabled": True, "push_url": "http://responder.test/ai_agent/events"}
         )
         self._post()
         queued = self._queued()
         with patch("requests.post", side_effect=Exception("boom")):
-            pushed = self.gateway._push_message(queued)
+            pushed = self.agent._push_message(queued)
         self.assertFalse(pushed)
         self.assertEqual(queued.state, "pending")
         self.assertTrue(queued.next_attempt_at)
         self.assertEqual(queued.attempts, 1)
 
     def test_cron_pushes_pending_messages(self):
-        self.gateway.write(
-            {"push_enabled": True, "push_url": "http://hermes.test/odoo/events"}
+        self.agent.write(
+            {"push_enabled": True, "push_url": "http://responder.test/ai_agent/events"}
         )
         self._post()
         queued = self._queued()
@@ -230,6 +230,6 @@ class TestHermesTransport(TransactionCase):
         self._post()
         queued = self._queued()
         with patch("requests.post") as post:
-            self.assertFalse(self.gateway._push_message(queued))
+            self.assertFalse(self.agent._push_message(queued))
         post.assert_not_called()
         self.assertEqual(queued.state, "pending")

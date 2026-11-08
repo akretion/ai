@@ -13,37 +13,37 @@ LONG_POLL_MAX = 20
 LONG_POLL_STEP = 0.5
 
 
-class HermesPoll(http.Controller):
+class AgentPoll(http.Controller):
     """Polling endpoint, kept as the fallback of the realtime push."""
 
     def _get_gateway(self, token):
-        return request.env["hermes.gateway"].sudo()._find_by_token(token)
+        return request.env["ai.bridge.agent"].sudo()._find_by_token(token)
 
-    @http.route("/hermes/poll", type="json", auth="public", csrf=False)
-    def hermes_poll(self, **kwargs):
-        """Return and claim pending messages for the gateway.
+    @http.route("/ai_agent/poll", type="json", auth="public", csrf=False)
+    def ai_agent_poll(self, **kwargs):
+        """Return and claim pending messages for the agent.
 
-        Claiming is atomic (``FOR UPDATE SKIP LOCKED``), so several gateway
+        Claiming is atomic (``FOR UPDATE SKIP LOCKED``), so several agent
         workers and several Odoo workers can poll concurrently without
         receiving the same message twice.
         """
         auth_header = request.httprequest.headers.get("Authorization", "")
         token = auth_header.replace("Bearer ", "").strip() if auth_header else ""
-        gateway = self._get_gateway(token)
-        if not gateway:
+        agent = self._get_gateway(token)
+        if not agent:
             return {"status": "error", "error": "invalid_token", "messages": []}
 
-        queue = request.env["hermes.message.queue"].sudo()
-        queue._requeue_stale(gateway)
-        limit = gateway.max_batch_size or 50
-        messages = queue._claim_batch(gateway, limit=limit, worker="poll")
+        queue = request.env["ai.bridge.agent.message"].sudo()
+        queue._requeue_stale(agent)
+        limit = agent.max_batch_size or 50
+        messages = queue._claim_batch(agent, limit=limit, worker="poll")
 
         wait = 0
-        if not messages and gateway.long_poll_timeout:
+        if not messages and agent.long_poll_timeout:
             try:
                 wait = min(
                     int(kwargs.get("wait") or 0),
-                    gateway.long_poll_timeout,
+                    agent.long_poll_timeout,
                     LONG_POLL_MAX,
                 )
             except (TypeError, ValueError):
@@ -52,7 +52,7 @@ class HermesPoll(http.Controller):
             deadline = time.monotonic() + wait
             while not messages and time.monotonic() < deadline:
                 time.sleep(LONG_POLL_STEP)
-                messages = queue._claim_batch(gateway, limit=limit, worker="poll")
+                messages = queue._claim_batch(agent, limit=limit, worker="poll")
 
         include_history = kwargs.get("include_history")
         payload = []
@@ -72,7 +72,7 @@ class HermesPoll(http.Controller):
                     "session_key": message.session_key,
                     "db_hash": message.db_hash,
                     "delivery_id": message.delivery_id,
-                    "capabilities": gateway._get_capabilities(message),
+                    "capabilities": agent._get_capabilities(message),
                     "create_date": message.create_date.isoformat()
                     if message.create_date
                     else None,
@@ -81,7 +81,7 @@ class HermesPoll(http.Controller):
             )
         return {
             "status": "ok",
-            "gateway_id": gateway.id,
-            "tenant": gateway._get_tenant_info(),
+            "agent_id": agent.id,
+            "tenant": agent._get_tenant_info(),
             "messages": payload,
         }

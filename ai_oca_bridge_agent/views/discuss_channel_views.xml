@@ -7,7 +7,7 @@
         <field name="inherit_id" ref="mail.discuss_channel_view_form" />
         <field name="arch" type="xml">
             <field name="description" position="after">
-                <field name="hermes_gateway_id" options="{'no_create': True}" />
+                <field name="agent_id" options="{'no_create': True}" />
             </field>
         </field>
     </record>

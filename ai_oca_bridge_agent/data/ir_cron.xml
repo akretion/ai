@@ -2,9 +2,9 @@
 <!-- Copyright 2026-TODAY Akretion - Raphael Valyi <raphael.valyi@akretion.com>
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
 <odoo>
-    <record id="ir_cron_hermes_cleanup_queue" model="ir.cron">
-        <field name="name">Hermes: Cleanup old message queue</field>
-        <field name="model_id" ref="model_hermes_message_queue" />
+    <record id="ir_cron_agent_cleanup_queue" model="ir.cron">
+        <field name="name">AI agent: Cleanup old message queue</field>
+        <field name="model_id" ref="model_ai_bridge_agent_message" />
         <field name="state">code</field>
         <field name="code">model._cleanup_old_messages()</field>
         <field name="interval_number">1</field>
@@ -12,9 +12,9 @@
         <field name="active" eval="True" />
     </record>
 
-    <record id="ir_cron_hermes_push_queue" model="ir.cron">
-        <field name="name">Hermes: Push pending messages</field>
-        <field name="model_id" ref="model_hermes_message_queue" />
+    <record id="ir_cron_ai_agent_push_queue" model="ir.cron">
+        <field name="name">AI agent: Push pending messages</field>
+        <field name="model_id" ref="model_ai_bridge_agent_message" />
         <field name="state">code</field>
         <field name="code">model._cron_push_queue()</field>
         <field name="interval_number">1</field>
@@ -22,9 +22,9 @@
         <field name="active" eval="True" />
     </record>
 
-    <record id="ir_cron_hermes_expire_credentials" model="ir.cron">
-        <field name="name">Hermes: Expire uncollected credentials</field>
-        <field name="model_id" ref="model_hermes_credential" />
+    <record id="ir_cron_agent_expire_credentials" model="ir.cron">
+        <field name="name">AI agent: Expire uncollected credentials</field>
+        <field name="model_id" ref="model_ai_bridge_agent_credential" />
         <field name="state">code</field>
         <field name="code">model._cron_expire_credentials()</field>
         <field name="interval_number">10</field>

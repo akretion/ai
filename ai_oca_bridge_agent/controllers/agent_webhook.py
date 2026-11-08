@@ -30,8 +30,8 @@ ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
 MARKDOWN_EXTENSIONS = ["tables", "fenced_code", "sane_lists", "nl2br"]
 
 
-class HermesWebhook(http.Controller):
-    """Endpoints used by the Hermes gateway to answer into Odoo.
+class AgentWebhook(http.Controller):
+    """Endpoints used by the AI agent to answer into Odoo.
 
     Every endpoint answers a JSON object with a ``status`` key: the JSON-RPC
     transport always returns HTTP 200, so the status must travel in the body.
@@ -39,36 +39,36 @@ class HermesWebhook(http.Controller):
 
     # ------------------------------------------------------------------ auth
     def _get_gateway_from_token(self, token):
-        return request.env["hermes.gateway"].sudo()._find_by_token(token)
+        return request.env["ai.bridge.agent"].sudo()._find_by_token(token)
 
     def _get_gateway_from_headers(self):
-        """Authenticate the gateway with its HMAC signature."""
+        """Authenticate the agent with its HMAC signature."""
         headers = request.httprequest.headers
-        tenant_key = headers.get("X-Hermes-Tenant")
-        signature = headers.get("X-Hermes-Signature", "")
-        timestamp = headers.get("X-Hermes-Timestamp", "")
+        tenant_key = headers.get("X-AI-Agent-Tenant")
+        signature = headers.get("X-AI-Agent-Signature", "")
+        timestamp = headers.get("X-AI-Agent-Timestamp", "")
         if not tenant_key or not signature or not timestamp:
-            return request.env["hermes.gateway"].sudo().browse()
+            return request.env["ai.bridge.agent"].sudo().browse()
         try:
             skew = abs(time.time() - int(timestamp))
         except (TypeError, ValueError):
-            return request.env["hermes.gateway"].sudo().browse()
+            return request.env["ai.bridge.agent"].sudo().browse()
         if skew > SIGNATURE_MAX_SKEW:
-            _logger.warning("Hermes signature expired for tenant %s", tenant_key)
-            return request.env["hermes.gateway"].sudo().browse()
-        gateway = (
-            request.env["hermes.gateway"]
+            _logger.warning("AI agent signature expired for tenant %s", tenant_key)
+            return request.env["ai.bridge.agent"].sudo().browse()
+        agent = (
+            request.env["ai.bridge.agent"]
             .sudo()
             .search([("tenant_key", "=", tenant_key), ("active", "=", True)], limit=1)
         )
-        if not gateway:
-            return request.env["hermes.gateway"].sudo().browse()
+        if not agent:
+            return request.env["ai.bridge.agent"].sudo().browse()
         body = request.httprequest.get_data(as_text=True)
-        expected = "sha256=" + gateway._compute_signature(timestamp, body or "")
+        expected = "sha256=" + agent._compute_signature(timestamp, body or "")
         if not hmac.compare_digest(expected, signature):
-            _logger.warning("Invalid Hermes signature for tenant %s", tenant_key)
-            return request.env["hermes.gateway"].sudo().browse()
-        return gateway
+            _logger.warning("Invalid AI agent signature for tenant %s", tenant_key)
+            return request.env["ai.bridge.agent"].sudo().browse()
+        return agent
 
     # --------------------------------------------------------------- payload
     @staticmethod
@@ -84,64 +84,64 @@ class HermesWebhook(http.Controller):
         return result
 
     # -------------------------------------------------------------- routing
-    @http.route("/hermes/reply", type="json", auth="public", csrf=False)
-    def hermes_reply(self, **kwargs):
-        """Receive an answer from the gateway (HMAC authenticated)."""
-        gateway = self._get_gateway_from_headers()
-        if not gateway:
+    @http.route("/ai_agent/reply", type="json", auth="public", csrf=False)
+    def ai_agent_reply(self, **kwargs):
+        """Receive an answer from the agent (HMAC authenticated)."""
+        agent = self._get_gateway_from_headers()
+        if not agent:
             return self._error("Invalid signature", "invalid_signature")
         data = request.get_json_data()
         if not data:
             return self._error("No JSON data")
-        return self._dispatch(gateway, data)
+        return self._dispatch(agent, data)
 
     @http.route(
-        "/hermes/webhook/<string:token>", type="json", auth="public", csrf=False
+        "/ai_agent/webhook/<string:token>", type="json", auth="public", csrf=False
     )
-    def hermes_webhook(self, token, **kwargs):
+    def ai_agent_webhook(self, token, **kwargs):
         """Legacy token authenticated answer endpoint."""
-        gateway = self._get_gateway_from_token(token)
-        if not gateway:
+        agent = self._get_gateway_from_token(token)
+        if not agent:
             return self._error("Invalid token", "invalid_token")
         data = request.get_json_data()
         if not data:
             return self._error("No JSON data")
-        return self._dispatch(gateway, data)
+        return self._dispatch(agent, data)
 
-    @http.route("/hermes/push/<string:token>", type="json", auth="public", csrf=False)
-    def hermes_push(self, token, **kwargs):
-        """Proactive message from the gateway (legacy token auth)."""
-        gateway = self._get_gateway_from_token(token)
-        if not gateway:
+    @http.route("/ai_agent/push/<string:token>", type="json", auth="public", csrf=False)
+    def ai_agent_push(self, token, **kwargs):
+        """Proactive message from the agent (legacy token auth)."""
+        agent = self._get_gateway_from_token(token)
+        if not agent:
             return self._error("Invalid token", "invalid_token")
         data = request.get_json_data()
         if not data:
             return self._error("No JSON data")
-        return self._dispatch(gateway, data)
+        return self._dispatch(agent, data)
 
-    def _dispatch(self, gateway, data):
+    def _dispatch(self, agent, data):
         action = data.get("action", "post_message")
         if action == "post_message":
-            return self._action_post_message(gateway, data)
+            return self._action_post_message(agent, data)
         if action == "typing":
             return self._action_typing(
-                gateway, data.get("channel_id"), data.get("is_typing", False)
+                agent, data.get("channel_id"), data.get("is_typing", False)
             )
         if action == "escalate":
-            return self._action_escalate(gateway, data)
+            return self._action_escalate(agent, data)
         return self._error(f"Unknown action: {action}", "unknown_action")
 
     # -------------------------------------------------------------- actions
-    def _get_target_message(self, gateway, data):
+    def _get_target_message(self, agent, data):
         """Find the queued message the answer belongs to."""
-        queue = request.env["hermes.message.queue"].sudo()
+        queue = request.env["ai.bridge.agent.message"].sudo()
         queue_id = data.get("queue_id")
         if queue_id:
             try:
                 message = queue.browse(int(queue_id))
             except (TypeError, ValueError):
                 return queue.browse()
-            if message.exists() and message.gateway_id == gateway:
+            if message.exists() and message.agent_id == agent:
                 return message
         channel_id = data.get("channel_id")
         if channel_id:
@@ -151,7 +151,7 @@ class HermesWebhook(http.Controller):
                 return queue.browse()
             return queue.search(
                 [
-                    ("gateway_id", "=", gateway.id),
+                    ("agent_id", "=", agent.id),
                     ("channel_id", "=", channel_id),
                     ("state", "in", ("processing", "pushed")),
                 ],
@@ -160,7 +160,7 @@ class HermesWebhook(http.Controller):
             )
         return queue.browse()
 
-    def _action_post_message(self, gateway, data):
+    def _action_post_message(self, agent, data):
         body = data.get("body")
         if not body:
             return self._error("Missing body", "missing_body")
@@ -174,19 +174,19 @@ class HermesWebhook(http.Controller):
         if not channel.exists():
             return self._error("Channel not found", "channel_not_found")
 
-        ai_user = gateway.ai_user_id
+        ai_user = agent.ai_user_id
         if not ai_user:
             return self._error("No AI user configured", "no_ai_user")
 
         delivery_id = data.get("delivery_id")
-        target = self._get_target_message(gateway, data)
+        target = self._get_target_message(agent, data)
 
         # Replay protection: the same delivery must not post twice.
         if delivery_id:
             previous = (
-                request.env["hermes.message.queue"]
+                request.env["ai.bridge.agent.message"]
                 .sudo()
-                ._find_by_delivery(gateway, delivery_id)
+                ._find_by_delivery(agent, delivery_id)
             )
             if previous and previous.state == "done":
                 return self._ok(
@@ -211,8 +211,8 @@ class HermesWebhook(http.Controller):
                     subtype_xmlid="mail.mt_comment",
                 )
             )
-        except Exception as exc:  # noqa: BLE001 - reported to the gateway
-            _logger.error("Hermes failed to post in channel %s: %s", channel.id, exc)
+        except Exception as exc:  # noqa: BLE001 - reported to the agent
+            _logger.error("AI agent failed to post in channel %s: %s", channel.id, exc)
             return self._error(str(exc), "post_failed")
 
         if target:
@@ -229,18 +229,18 @@ class HermesWebhook(http.Controller):
                 )
         return self._ok(message_id=message.id)
 
-    def _action_typing(self, gateway, channel_id, is_typing):
+    def _action_typing(self, agent, channel_id, is_typing):
         if not channel_id:
             return self._error("Missing channel_id", "missing_channel")
         channel = request.env["discuss.channel"].sudo().browse(int(channel_id))
         if not channel.exists():
             return self._error("Channel not found", "channel_not_found")
         for member in channel.channel_member_ids:
-            if member.partner_id == gateway.ai_user_id.partner_id:
+            if member.partner_id == agent.ai_user_id.partner_id:
                 member._notify_typing(is_typing=is_typing)
         return self._ok()
 
-    def _action_escalate(self, gateway, data):
+    def _action_escalate(self, agent, data):
         """Escalation hook.
 
         EXTENSION POINT: override in a child module to create a ticket, notify
@@ -253,11 +253,13 @@ class HermesWebhook(http.Controller):
         )
 
     # ------------------------------------------------------------ notifying
-    @http.route("/hermes/notify/<string:token>", type="json", auth="public", csrf=False)
-    def hermes_notify(self, token, **kwargs):
+    @http.route(
+        "/ai_agent/notify/<string:token>", type="json", auth="public", csrf=False
+    )
+    def ai_agent_notify(self, token, **kwargs):
         """Send a web notification to an Odoo user."""
-        gateway = self._get_gateway_from_token(token)
-        if not gateway:
+        agent = self._get_gateway_from_token(token)
+        if not agent:
             return self._error("Invalid token", "invalid_token")
         data = request.get_json_data()
         if not data:
@@ -271,7 +273,7 @@ class HermesWebhook(http.Controller):
             return self._error("User not found", "user_not_found")
 
         notif_message = data.get("message", "")
-        notif_title = data.get("title", "Hermes")
+        notif_title = data.get("title", "AI agent")
         notif_type = data.get("type", "info")
         sticky = data.get("sticky", False)
         action = data.get("action")
@@ -290,17 +292,17 @@ class HermesWebhook(http.Controller):
             except Exception as exc:  # noqa: BLE001 - fall back to DM
                 _logger.warning("web_notify failed, falling back to DM: %s", exc)
 
-        return self._notify_fallback(gateway, user, notif_title, notif_message)
+        return self._notify_fallback(agent, user, notif_title, notif_message)
 
-    def _notify_fallback(self, gateway, user, title, message):
+    def _notify_fallback(self, agent, user, title, message):
         """Fallback notification via DM when web_notify is not available."""
         try:
             channel_model = request.env["discuss.channel"].sudo()
-            channel_info = channel_model.with_user(gateway.ai_user_id.id).channel_get(
+            channel_info = channel_model.with_user(agent.ai_user_id.id).channel_get(
                 [user.partner_id.id]
             )
             channel = channel_model.browse(channel_info["id"])
-            posted = channel.with_user(gateway.ai_user_id.id).message_post(
+            posted = channel.with_user(agent.ai_user_id.id).message_post(
                 body=Markup(f"<p><b>{title}</b></p><p>{message}</p>"),
                 message_type="comment",
                 subtype_xmlid="mail.mt_comment",
@@ -310,7 +312,7 @@ class HermesWebhook(http.Controller):
                 message_id=posted.id,
                 channel_id=channel.id,
             )
-        except Exception as exc:  # noqa: BLE001 - reported to the gateway
+        except Exception as exc:  # noqa: BLE001 - reported to the agent
             _logger.error("Fallback notification failed: %s", exc)
             return self._error(str(exc), "notify_failed")
 

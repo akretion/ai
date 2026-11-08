@@ -8,31 +8,31 @@
         <field name="inherit_id" ref="base.view_users_form" />
         <field name="arch" type="xml">
             <xpath expr="//notebook" position="inside">
-                <page string="Hermes AI" name="hermes_ai">
+                <page string="AI assistant" name="agent_ai">
                     <group>
-                        <field name="hermes_has_api_key" string="Connected" />
-                        <field name="hermes_credential_expiry" />
+                        <field name="agent_has_api_key" string="Connected" />
+                        <field name="agent_credential_expiry" />
                     </group>
                     <div class="text-muted">
                         Connecting hands a dedicated Odoo API key over to the
-                        Hermes assistant. The assistant then reads records with
+                        AI agent assistant. The assistant then reads records with
                         <b>your own</b> access rights and record rules; revoking
                         the connection invalidates the key immediately.
                     </div>
                     <div class="mt-3">
                         <button
-                            name="action_hermes_connect"
+                            name="action_agent_connect"
                             type="object"
                             string="Connect the assistant"
                             class="btn-primary"
-                            invisible="hermes_has_api_key"
+                            invisible="agent_has_api_key"
                         />
                         <button
-                            name="action_hermes_disconnect"
+                            name="action_agent_disconnect"
                             type="object"
                             string="Disconnect"
                             class="btn-secondary"
-                            invisible="not hermes_has_api_key"
+                            invisible="not agent_has_api_key"
                             confirm="The assistant will lose access to your Odoo records."
                         />
                     </div>
@@ -47,31 +47,31 @@
         <field name="inherit_id" ref="base.view_users_form_simple_modif" />
         <field name="arch" type="xml">
             <xpath expr="//notebook" position="inside">
-                <page string="Hermes AI" name="hermes_ai">
+                <page string="AI assistant" name="agent_ai">
                     <group>
-                        <field name="hermes_has_api_key" string="Connected" />
-                        <field name="hermes_credential_expiry" />
+                        <field name="agent_has_api_key" string="Connected" />
+                        <field name="agent_credential_expiry" />
                     </group>
                     <div class="text-muted">
                         Connecting hands a dedicated Odoo API key over to the
-                        Hermes assistant. The assistant then reads records with
+                        AI agent assistant. The assistant then reads records with
                         <b>your own</b> access rights and record rules; revoking
                         the connection invalidates the key immediately.
                     </div>
                     <div class="mt-3">
                         <button
-                            name="action_hermes_connect"
+                            name="action_agent_connect"
                             type="object"
                             string="Connect the assistant"
                             class="btn-primary"
-                            invisible="hermes_has_api_key"
+                            invisible="agent_has_api_key"
                         />
                         <button
-                            name="action_hermes_disconnect"
+                            name="action_agent_disconnect"
                             type="object"
                             string="Disconnect"
                             class="btn-secondary"
-                            invisible="not hermes_has_api_key"
+                            invisible="not agent_has_api_key"
                             confirm="The assistant will lose access to your Odoo records."
                         />
                     </div>

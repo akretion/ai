@@ -25,7 +25,7 @@ The module exposes two transports for the same conversation:
 - **Push (recommended)**: Odoo signs an event with an HMAC secret and posts it
   to the responder the moment a message is committed. Latency is one HTTP call,
   and no Odoo worker is ever held waiting.
-- **Polling (fallback)**: the responder calls `/hermes/poll` and *claims* the
+- **Polling (fallback)**: the responder calls `/ai_agent/poll` and *claims* the
   pending messages atomically. Works through any firewall, no inbound route
   needed on the Odoo side, but costs one request per interval per tenant.
 
@@ -50,7 +50,7 @@ One responder installation can serve many Odoo databases:
 
 ## Who may talk to the assistant
 
-Access is a group (`Use the AI assistant`), configurable per gateway. System
+Access is a group (`Use the AI assistant`), configurable per agent. System
 administrators always keep access so a fresh install stays configurable.
 Someone outside the allowed groups who addresses the assistant receives a
 configurable standard answer, posted at most once per cooldown to avoid

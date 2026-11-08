@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Reference Hermes gateway - push receiver.
+"""Reference AI agent - push receiver.
 
 Implements protocol v1 of ``ai_oca_bridge_agent``: Odoo pushes an event,
-this process answers by calling ``/hermes/reply`` with an HMAC signature.
+this process answers by calling ``/ai_agent/reply`` with an HMAC signature.
 
-This is the transport skeleton of a Hermes gateway: replace ``build_answer``
+This is the transport skeleton of a AI agent: replace ``build_answer``
 with a call to your agent (Hermes AIAgent, an MCP client, a queue, ...).
 Everything that is actual product policy (prompts, skills, toolsets, model
-choice, tenant routing) stays in your private gateway, never in the OCA
+choice, tenant routing) stays in your private agent, never in the OCA
 module.
 
 Stdlib only, so it runs anywhere Odoo runs.
 
 Usage:
-    python hermes_push_server.py \
+    python push_server_example.py \
         --port 8770 \
         --odoo-url http://127.0.0.1:8069 \
         --tenant 8dc3bd93b34c7c1c \
@@ -22,11 +22,11 @@ Usage:
 
 Protocol (verified here and in the module tests):
     POST /odoo/events
-      X-Hermes-Tenant, X-Hermes-Timestamp, X-Hermes-Delivery,
-      X-Hermes-Signature: sha256=hex(hmac_sha256(secret, f"{ts}.{raw_body}"))
+      X-AI-Agent-Tenant, X-AI-Agent-Timestamp, X-AI-Agent-Delivery,
+      X-AI-Agent-Signature: sha256=hex(hmac_sha256(secret, f"{ts}.{raw_body}"))
     -> 202 {"status": "accepted"}
 
-    POST {odoo_url}/hermes/reply  (same HMAC headers)
+    POST {odoo_url}/ai_agent/reply  (same HMAC headers)
       {"delivery_id": ..., "queue_id": ..., "channel_id": ...,
        "action": "post_message", "body": "..."}
 """
@@ -41,7 +41,7 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-logger = logging.getLogger("hermes_push")
+logger = logging.getLogger("ai_agent_push")
 
 CONFIG = {}
 
@@ -59,7 +59,7 @@ def build_answer(event):
     capabilities = event.get("capabilities") or {}
     if CONFIG["mode"] == "echo":
         tier = capabilities.get("tier", "basic")
-        return f"Echo [{tier}] from Hermes: {text}"
+        return f"Echo [{tier}] from AI agent: {text}"
     return f"Received from {author}: {text}"
 
 
@@ -78,12 +78,12 @@ def post_reply(event, answer):
     timestamp = str(int(time.time()))
     headers = {
         "Content-Type": "application/json",
-        "X-Hermes-Tenant": CONFIG["tenant"],
-        "X-Hermes-Timestamp": timestamp,
-        "X-Hermes-Signature": "sha256=" + sign(CONFIG["secret"], timestamp, body),
+        "X-AI-Agent-Tenant": CONFIG["tenant"],
+        "X-AI-Agent-Timestamp": timestamp,
+        "X-AI-Agent-Signature": "sha256=" + sign(CONFIG["secret"], timestamp, body),
     }
     request = urllib.request.Request(
-        f"{CONFIG['odoo_url']}/hermes/reply",
+        f"{CONFIG['odoo_url']}/ai_agent/reply",
         data=body.encode(),
         headers=headers,
         method="POST",
@@ -118,9 +118,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, {"status": "error", "message": "unknown path"})
             return
         raw = self._read_body()
-        timestamp = self.headers.get("X-Hermes-Timestamp", "")
-        signature = self.headers.get("X-Hermes-Signature", "")
-        tenant = self.headers.get("X-Hermes-Tenant", "")
+        timestamp = self.headers.get("X-AI-Agent-Timestamp", "")
+        signature = self.headers.get("X-AI-Agent-Signature", "")
+        tenant = self.headers.get("X-AI-Agent-Tenant", "")
 
         if tenant != CONFIG["tenant"]:
             self._send(403, {"status": "error", "message": "unknown tenant"})
@@ -168,7 +168,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Hermes gateway push receiver")
+    parser = argparse.ArgumentParser(description="AI agent push receiver")
     parser.add_argument("--port", type=int, default=8770)
     parser.add_argument("--odoo-url", default="http://127.0.0.1:8069")
     parser.add_argument("--tenant", required=True)
