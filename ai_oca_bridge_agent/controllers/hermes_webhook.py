@@ -205,9 +205,8 @@ class HermesWebhook(http.Controller):
                 )
                 .message_post(
                     body=Markup(body_html),
-                    attachment_ids=[
-                        (4, attachment.id) for attachment in attachment_ids
-                    ],
+                    # 18.0 message_post expects a plain list of ids here.
+                    attachment_ids=attachment_ids.ids,
                     message_type="comment",
                     subtype_xmlid="mail.mt_comment",
                 )
