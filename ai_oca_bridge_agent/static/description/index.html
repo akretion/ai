@@ -949,10 +949,11 @@ expect (Hermes → Skills). Several agents can share one skill.</li>
 indexed in Odoo: the responder does the retrieval, and a glue module
 can fill the body from <tt class="docutils literal">document_page</tt>.</li>
 <li><strong>Model override</strong>: a provider and a model for this agent
-(<tt class="docutils literal">deepseek</tt> + <tt class="docutils literal"><span class="pre">deepseek-v4-pro</span></tt>). The responder receives
-<tt class="docutils literal"><span class="pre">provider::model</span></tt>; <strong>the provider credential never leaves the
-responder</strong>, so an Odoo administrator can choose the model without
-ever seeing the API key.</li>
+(<tt class="docutils literal">deepseek</tt> + <tt class="docutils literal"><span class="pre">deepseek-v4-pro</span></tt>). The responder receives both and
+decides how to apply them; the reference bridge passes the model name
+and lets the gateway resolve the provider. <strong>The provider credential
+never leaves the responder</strong>, so an Odoo administrator can choose the
+model without ever seeing the API key.</li>
 </ul>
 <p>All of it travels in the poll response under <tt class="docutils literal">agent</tt>, plus the stable
 <tt class="docutils literal">agent_key</tt> on every message, so one responder can serve several

@@ -563,10 +563,11 @@ configuration the responder applies to every conversation:
   indexed in Odoo: the responder does the retrieval, and a glue module
   can fill the body from ``document_page``.
 - **Model override**: a provider and a model for this agent
-  (``deepseek`` + ``deepseek-v4-pro``). The responder receives
-  ``provider::model``; **the provider credential never leaves the
-  responder**, so an Odoo administrator can choose the model without
-  ever seeing the API key.
+  (``deepseek`` + ``deepseek-v4-pro``). The responder receives both and
+  decides how to apply them; the reference bridge passes the model name
+  and lets the gateway resolve the provider. **The provider credential
+  never leaves the responder**, so an Odoo administrator can choose the
+  model without ever seeing the API key.
 
 All of it travels in the poll response under ``agent``, plus the stable
 ``agent_key`` on every message, so one responder can serve several
