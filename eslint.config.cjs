@@ -200,6 +200,14 @@ const config = [{
         ecmaVersion: 2024,
         sourceType: "module",
     },
+}, {
+    // Odoo 18 backend assets are ES modules.
+    files: ["**/static/src/**/*.js"],
+
+    languageOptions: {
+        ecmaVersion: 2024,
+        sourceType: "module",
+    },
 }];
 
 module.exports = config
