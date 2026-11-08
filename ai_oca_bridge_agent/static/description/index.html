@@ -931,6 +931,23 @@ user’s own key, so a cached tool list or a prompt injection cannot widen
 either mode. <tt class="docutils literal">odoo_models</tt> lets the assistant discover what it may
 query instead of guessing.</p>
 </div>
+<div class="section" id="what-the-user-is-looking-at">
+<h2>What the user is looking at</h2>
+<p>When the assistant lives in Discuss, it has no idea which screen the
+user has open — and a support question usually starts with “this
+invoice”. A small web asset reports the current URL on every navigation
+(throttled to one request every few seconds, only when the page actually
+changed) to <tt class="docutils literal">/ai_agent/web_context</tt>, which stores one context per
+user: model, record id, view type, action and URL.</p>
+<p>The context travels with the next message (<tt class="docutils literal">view_context</tt>) and the
+responder treats it as a <strong>hint</strong>: it may say “you are looking at a sale
+order in form view”, but it can never widen access, because every read
+still runs with the user’s own API key. A context older than an hour is
+flagged <tt class="docutils literal">stale</tt>, and a cron forgets contexts nobody refreshed for 30
+days.</p>
+<p>The reference bridge prefixes the message with that context, so the
+agent can answer about “this record” without being told which one.</p>
+</div>
 <div class="section" id="giving-the-agent-a-role-instructions-skills-knowledge">
 <h2>Giving the agent a role: instructions, skills, knowledge</h2>
 <p>An agent record is not only a transport endpoint, it carries the

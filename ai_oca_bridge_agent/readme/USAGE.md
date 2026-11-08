@@ -152,6 +152,24 @@ The agent checks every call with Odoo before running it and uses the user's
 own key, so a cached tool list or a prompt injection cannot widen either mode.
 `odoo_models` lets the assistant discover what it may query instead of guessing.
 
+## What the user is looking at
+
+When the assistant lives in Discuss, it has no idea which screen the user has
+open — and a support question usually starts with "this invoice". A small web
+asset reports the current URL on every navigation (throttled to one request
+every few seconds, only when the page actually changed) to
+`/ai_agent/web_context`, which stores one context per user: model, record id,
+view type, action and URL.
+
+The context travels with the next message (`view_context`) and the responder
+treats it as a **hint**: it may say "you are looking at a sale order in form
+view", but it can never widen access, because every read still runs with the
+user's own API key. A context older than an hour is flagged `stale`, and a cron
+forgets contexts nobody refreshed for 30 days.
+
+The reference bridge prefixes the message with that context, so the agent can
+answer about "this record" without being told which one.
+
 ## Giving the agent a role: instructions, skills, knowledge
 
 An agent record is not only a transport endpoint, it carries the configuration

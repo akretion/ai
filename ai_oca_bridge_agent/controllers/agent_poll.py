@@ -73,6 +73,9 @@ class AgentPoll(http.Controller):
                     "db_hash": message.db_hash,
                     "delivery_id": message.delivery_id,
                     "agent_key": agent.agent_key,
+                    "view_context": request.env["ai.bridge.user.context"]
+                    .sudo()
+                    ._get_for_user(message.user_id),
                     "capabilities": agent._get_capabilities(message),
                     "create_date": message.create_date.isoformat()
                     if message.create_date

@@ -31,4 +31,14 @@
         <field name="interval_type">minutes</field>
         <field name="active" eval="True" />
     </record>
+
+    <record id="ir_cron_agent_cleanup_context" model="ir.cron">
+        <field name="name">AI agent: Forget old browsing contexts</field>
+        <field name="model_id" ref="model_ai_bridge_user_context" />
+        <field name="state">code</field>
+        <field name="code">model._cron_cleanup()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="active" eval="True" />
+    </record>
 </odoo>
