@@ -913,6 +913,47 @@ user’s own key, so a cached tool list or a prompt injection cannot widen
 either mode. <tt class="docutils literal">odoo_models</tt> lets the assistant discover what it may
 query instead of guessing.</p>
 </div>
+<div class="section" id="rendering-and-attachments">
+<h2>Rendering and attachments</h2>
+<p>The reply payload tells Odoo how to read the answer, so the assistant is
+not forced into plain text:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="30%" />
+<col width="70%" />
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head"><tt class="docutils literal">format</tt></th>
+<th class="head">What Odoo does</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td><tt class="docutils literal">plain</tt> (default)</td>
+<td>escapes, keeps line breaks, turns bare URLs
+into links</td>
+</tr>
+<tr><td><tt class="docutils literal">markdown</tt></td>
+<td>converts tables, lists, fenced code to HTML,
+then sanitizes</td>
+</tr>
+<tr><td><tt class="docutils literal">html</tt></td>
+<td>sanitizes and keeps the markup</td>
+</tr>
+</tbody>
+</table>
+<p><tt class="docutils literal">markdown</tt> degrades to <tt class="docutils literal">plain</tt> when python-markdown is not installed
+on the server, so the module stays installable without it. Everything is
+sanitized whatever the format: a model answer can never inject a script
+into Discuss.</p>
+<p>A reply may also carry <tt class="docutils literal">attachments</tt>, a list of
+<tt class="docutils literal">{name, mimetype, b64}</tt> (5 files, 10 MB total). Odoo stores them as
+regular Discuss attachments on the message, so they respect the
+channel’s access rights and show the usual download link. Path
+separators in names are neutralized.</p>
+<p>The reference responder only attaches files it finds in its own outbox
+directory, and removes them once posted: the assistant cannot exfiltrate
+an arbitrary server file by naming it.</p>
+</div>
 <div class="section" id="troubleshooting">
 <h2>Troubleshooting</h2>
 <ul class="simple">

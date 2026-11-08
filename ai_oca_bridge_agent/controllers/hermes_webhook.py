@@ -1,6 +1,7 @@
 # Copyright 2026-TODAY Akretion - Raphael Valyi <raphael.valyi@akretion.com>
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 
+import base64
 import hmac
 import html as html_module
 import logging
@@ -11,10 +12,22 @@ from markupsafe import Markup
 
 from odoo import http
 from odoo.http import request
+from odoo.tools.mail import html_sanitize
+
+try:  # optional, renders tables/lists instead of falling back to plain text
+    import markdown
+except ImportError:  # pragma: no cover - depends on the customer's environment
+    markdown = None
 
 _logger = logging.getLogger(__name__)
 
 SIGNATURE_MAX_SKEW = 300
+
+#: A reply may carry a few generated files, not a data dump.
+ATTACHMENT_MAX_COUNT = 5
+ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
+
+MARKDOWN_EXTENSIONS = ["tables", "fenced_code", "sane_lists", "nl2br"]
 
 
 class HermesWebhook(http.Controller):
@@ -181,7 +194,8 @@ class HermesWebhook(http.Controller):
                     message_id=previous.response_message_id.id or False,
                 )
 
-        body_html = self._format_body(body)
+        body_html = self._format_body(body, data.get("format"))
+        attachment_ids = self._create_attachments(request.env, channel, data)
         try:
             message = (
                 channel.with_user(ai_user.id)
@@ -191,6 +205,9 @@ class HermesWebhook(http.Controller):
                 )
                 .message_post(
                     body=Markup(body_html),
+                    attachment_ids=[
+                        (4, attachment.id) for attachment in attachment_ids
+                    ],
                     message_type="comment",
                     subtype_xmlid="mail.mt_comment",
                 )
@@ -299,19 +316,71 @@ class HermesWebhook(http.Controller):
             return self._error(str(exc), "notify_failed")
 
     # ----------------------------------------------------------- formatting
-    def _format_body(self, body):
-        """Format the gateway answer as Odoo HTML.
+    def _format_body(self, body, fmt=None):
+        """Render the responder answer as sanitized Odoo HTML.
 
-        Markdown-like output from the agent is kept as text with links; the
-        rest is escaped so a model answer can never inject HTML in Discuss.
+        ``format`` is ``plain`` (default), ``markdown`` or ``html``. Whatever
+        the responder sends, the result is sanitized, so a model answer can
+        never inject a script in Discuss. ``markdown`` degrades to ``plain``
+        when the python library is not installed.
         """
         if not body:
-            return "<p></p>"
-        text = re.sub(r"<[^>]+>", "", body)
-        text = html_module.unescape(text)
-        if not text.strip():
-            return "<p></p>"
-        text = html_module.escape(text)
-        url_pattern = re.compile(r"(https?://[^\s<>\"{}|\\^`\[\]]+)")
-        text = url_pattern.sub(r'<a href="\1" target="_blank">\1</a>', text)
-        return f"<span>{text}</span>"
+            return Markup("<p></p>")
+        fmt = (fmt or "plain").strip().lower()
+        if fmt == "html":
+            return Markup(html_sanitize(body, silent=True))
+        if fmt == "markdown" and markdown is not None:
+            rendered = markdown.markdown(body, extensions=MARKDOWN_EXTENSIONS)
+            return Markup(html_sanitize(rendered, silent=True))
+        return Markup(self._plain_to_html(body))
+
+    def _plain_to_html(self, body):
+        """Escape plain text, keep its line breaks, turn bare URLs into links."""
+        paragraphs = [
+            paragraph.strip()
+            for paragraph in re.split(r"\n\s*\n", body)
+            if paragraph.strip()
+        ]
+        rendered = []
+        for paragraph in paragraphs:
+            text = html_module.escape(paragraph)
+            url_pattern = re.compile(r"(https?://[^\s<>\"{}|\\^`\[\]]+)")
+            text = url_pattern.sub(r'<a href="\1" target="_blank">\1</a>', text)
+            text = text.replace("\n", "<br/>")
+            rendered.append(f"<p>{text}</p>")
+        return "".join(rendered) or "<p></p>"
+
+    # ---------------------------------------------------------- attachments
+    def _create_attachments(self, env, channel, data):
+        """Store the files the responder generated, as Discuss attachments."""
+        items = data.get("attachments") or []
+        if not isinstance(items, list):
+            _logger.warning("Ignoring malformed attachments payload")
+            return request.env["ir.attachment"]
+        attachments = env["ir.attachment"].sudo()
+        total = 0
+        created = attachments.browse()
+        for item in items[:ATTACHMENT_MAX_COUNT]:
+            if not isinstance(item, dict):
+                continue
+            name = (item.get("name") or "attachment").replace("/", "_").strip()[:120]
+            datas = item.get("b64") or ""
+            try:
+                size = len(base64.b64decode(datas, validate=True))
+            except Exception:  # noqa: BLE001 - garbage payload, skip it
+                _logger.warning("Ignoring attachment %s: invalid base64", name)
+                continue
+            total += size
+            if total > ATTACHMENT_MAX_BYTES:
+                _logger.warning("Attachment budget reached, ignoring %s", name)
+                break
+            created |= attachments.create(
+                {
+                    "name": name,
+                    "datas": datas,
+                    "mimetype": item.get("mimetype") or "application/octet-stream",
+                    "res_model": "discuss.channel",
+                    "res_id": channel.id,
+                }
+            )
+        return created

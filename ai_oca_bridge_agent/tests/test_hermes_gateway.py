@@ -206,23 +206,25 @@ class TestHermesGateway(TransactionCase):
         self.assertFalse(queued)
 
     def test_webhook_format_body(self):
-        """Test HTML formatting in webhook."""
+        """Plain text is wrapped and its URLs become links."""
         from ..controllers.hermes_webhook import HermesWebhook
 
         webhook = HermesWebhook()
 
-        # Plain text
-        result = webhook._format_body("Hello world")
+        result = str(webhook._format_body("Hello world"))
         self.assertIn("Hello world", result)
-        self.assertTrue(result.startswith("<span>"))
+        self.assertTrue(result.startswith("<p>"))
 
-        # HTML input (should strip tags)
-        result = webhook._format_body("<p>Hello</p>")
-        self.assertIn("Hello", result)
-        self.assertNotIn("<p>", result)
+        # No format means plain: an HTML tag is escaped, not interpreted.
+        result = str(webhook._format_body("<p>Hello</p>"))
+        self.assertIn("&lt;p&gt;Hello&lt;/p&gt;", result)
+
+        # Explicit html keeps markup, sanitized.
+        result = str(webhook._format_body("<p>Hello <b>there</b></p>", "html"))
+        self.assertIn("<b>there</b>", result)
 
         # URL conversion
-        result = webhook._format_body("Visit https://example.com")
+        result = str(webhook._format_body("Visit https://example.com"))
         self.assertIn('<a href="https://example.com"', result)
 
     def test_poll_claiming_is_delegated(self):

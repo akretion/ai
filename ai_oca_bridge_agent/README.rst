@@ -532,6 +532,39 @@ user's own key, so a cached tool list or a prompt injection cannot widen
 either mode. ``odoo_models`` lets the assistant discover what it may
 query instead of guessing.
 
+Rendering and attachments
+-------------------------
+
+The reply payload tells Odoo how to read the answer, so the assistant is
+not forced into plain text:
+
++---------------------+------------------------------------------------+
+| ``format``          | What Odoo does                                 |
++=====================+================================================+
+| ``plain`` (default) | escapes, keeps line breaks, turns bare URLs    |
+|                     | into links                                     |
++---------------------+------------------------------------------------+
+| ``markdown``        | converts tables, lists, fenced code to HTML,   |
+|                     | then sanitizes                                 |
++---------------------+------------------------------------------------+
+| ``html``            | sanitizes and keeps the markup                 |
++---------------------+------------------------------------------------+
+
+``markdown`` degrades to ``plain`` when python-markdown is not installed
+on the server, so the module stays installable without it. Everything is
+sanitized whatever the format: a model answer can never inject a script
+into Discuss.
+
+A reply may also carry ``attachments``, a list of
+``{name, mimetype, b64}`` (5 files, 10 MB total). Odoo stores them as
+regular Discuss attachments on the message, so they respect the
+channel's access rights and show the usual download link. Path
+separators in names are neutralized.
+
+The reference responder only attaches files it finds in its own outbox
+directory, and removes them once posted: the assistant cannot exfiltrate
+an arbitrary server file by naming it.
+
 Troubleshooting
 ---------------
 
