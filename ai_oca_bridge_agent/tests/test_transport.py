@@ -45,7 +45,7 @@ class TestHermesTransport(TransactionCase):
                         0,
                         [
                             cls.env.ref("base.group_user").id,
-                            cls.env.ref("ai_oca_bridge_hermes.group_hermes_user").id,
+                            cls.env.ref("ai_oca_bridge_agent.group_agent_user").id,
                         ],
                     )
                 ],
@@ -147,7 +147,7 @@ class TestHermesTransport(TransactionCase):
                         0,
                         [
                             self.env.ref("base.group_user").id,
-                            self.env.ref("ai_oca_bridge_hermes.group_hermes_user").id,
+                            self.env.ref("ai_oca_bridge_agent.group_agent_user").id,
                         ],
                     )
                 ],

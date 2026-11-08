@@ -3,7 +3,7 @@
 Hermes Odoo Gateway - Standalone client with AIAgent integration.
 
 This script connects a running Hermes AIAgent to an Odoo instance
-with the ai_oca_bridge_hermes module installed.
+with the ai_oca_bridge_agent module installed.
 
 Usage:
     # Standalone mode (for testing)

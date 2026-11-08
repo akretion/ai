@@ -2,12 +2,13 @@
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 
 {
-    "name": "AI OCA Bridge Hermes",
+    "name": "AI OCA Bridge Agent",
     "summary": """
-        Integrate Hermes AI Agent as a native chatbot inside Odoo Discuss.
-        Requires a running Hermes gateway with the Odoo platform adapter.
+        Realtime bridge between Odoo Discuss and an external AI agent runtime,
+        with per-user identity, an Odoo access policy and a tool whitelist.
+        Backend agnostic: Hermes Agent is the reference implementation.
     """,
-    "version": "18.0.1.5.0",
+    "version": "18.0.2.0.0",
     "license": "AGPL-3",
     "author": "Akretion,Odoo Community Association (OCA)",
     "website": "https://github.com/OCA/ai",

@@ -269,7 +269,7 @@ class HermesGateway(models.Model):
     @api.model
     def _default_allowed_groups(self):
         group = self.env.ref(
-            "ai_oca_bridge_hermes.group_hermes_user", raise_if_not_found=False
+            "ai_oca_bridge_agent.group_agent_user", raise_if_not_found=False
         )
         return group
 
@@ -284,7 +284,7 @@ class HermesGateway(models.Model):
             return True
         if self.allowed_group_ids:
             return bool(self.allowed_group_ids & user.groups_id)
-        return user.has_group("ai_oca_bridge_hermes.group_hermes_user")
+        return user.has_group("ai_oca_bridge_agent.group_agent_user")
 
     def _get_capabilities(self, message):
         """Describe what the gateway may do on behalf of the user.

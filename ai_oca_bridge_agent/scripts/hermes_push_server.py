@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Reference Hermes gateway - push receiver.
 
-Implements protocol v1 of ``ai_oca_bridge_hermes``: Odoo pushes an event,
+Implements protocol v1 of ``ai_oca_bridge_agent``: Odoo pushes an event,
 this process answers by calling ``/hermes/reply`` with an HMAC signature.
 
 This is the transport skeleton of a Hermes gateway: replace ``build_answer``

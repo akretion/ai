@@ -2,8 +2,8 @@
 <!-- Copyright 2026-TODAY Akretion - Raphael Valyi <raphael.valyi@akretion.com>
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
 <odoo>
-    <record id="group_hermes_user" model="res.groups">
-        <field name="name">Use Hermes AI</field>
+    <record id="group_agent_user" model="res.groups">
+        <field name="name">Use the AI assistant</field>
         <field name="category_id" ref="base.module_category_productivity" />
         <field name="comment">
             Members of this group may chat with the Hermes AI assistant in
@@ -30,7 +30,7 @@
     <record id="hermes_message_queue_rule_own" model="ir.rule">
         <field name="name">Hermes message queue: own messages</field>
         <field name="model_id" ref="model_hermes_message_queue" />
-        <field name="groups" eval="[(4, ref('group_hermes_user'))]" />
+        <field name="groups" eval="[(4, ref('group_agent_user'))]" />
         <field name="domain_force">[('user_id', '=', user.id)]</field>
     </record>
 </odoo>

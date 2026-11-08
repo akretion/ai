@@ -29,7 +29,7 @@ class TestHermesTools(TransactionCase):
             {"name": "Tools Gateway", "ai_user_id": cls.user.id}
         )
         cls.power_group = cls.env["res.groups"].create({"name": "Hermes Power Users"})
-        cls.env.ref("ai_oca_bridge_hermes.tool_partners").allowed_group_ids = [
+        cls.env.ref("ai_oca_bridge_agent.tool_partners").allowed_group_ids = [
             (6, 0, [cls.env.ref("base.group_user").id])
         ]
 
@@ -69,7 +69,7 @@ class TestHermesTools(TransactionCase):
         )
 
     def test_archived_tool_is_refused(self):
-        self.env.ref("ai_oca_bridge_hermes.tool_products").active = False
+        self.env.ref("ai_oca_bridge_agent.tool_products").active = False
         self.assertIsNone(
             self.env["hermes.tool"]._resolve_for_user(self.user, "products")
         )
@@ -81,7 +81,7 @@ class TestHermesTools(TransactionCase):
         self.assertIsNotNone(tool)
 
     def test_field_whitelist_is_parsed(self):
-        tool = self.env.ref("ai_oca_bridge_hermes.tool_partners")
+        tool = self.env.ref("ai_oca_bridge_agent.tool_partners")
         tool.field_names = "name, vat ,"
         self.assertEqual(tool._as_tool_dict()["fields"], ["name", "vat"])
 
@@ -167,7 +167,7 @@ class TestHermesTools(TransactionCase):
 
     def test_user_without_group_has_no_tool(self):
         tool_model = self.env["hermes.tool"]
-        tool_model.env.ref("ai_oca_bridge_hermes.tool_partners").allowed_group_ids = [
+        tool_model.env.ref("ai_oca_bridge_agent.tool_partners").allowed_group_ids = [
             (6, 0, [self.power_group.id])
         ]
         self.assertFalse(tool_model._resolve_for_user(self.user, "partners"))

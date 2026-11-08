@@ -146,7 +146,7 @@ class TestHermesGateway(TransactionCase):
                         0,
                         [
                             self.env.ref("base.group_user").id,
-                            self.env.ref("ai_oca_bridge_hermes.group_hermes_user").id,
+                            self.env.ref("ai_oca_bridge_agent.group_agent_user").id,
                         ],
                     )
                 ],

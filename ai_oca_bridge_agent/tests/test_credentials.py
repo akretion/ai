@@ -32,7 +32,7 @@ class TestHermesCredentials(TransactionCase):
                 "allow_user_connect": True,
             }
         )
-        group = cls.env.ref("ai_oca_bridge_hermes.group_hermes_user")
+        group = cls.env.ref("ai_oca_bridge_agent.group_agent_user")
         cls.user = cls.ResUsers.create(
             {
                 "name": "Cred User",
