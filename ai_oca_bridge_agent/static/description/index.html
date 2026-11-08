@@ -698,8 +698,26 @@ preferences.</td>
 (days)</td>
 <td>30</td>
 <td>Lifetime of the API key
-created by <strong>Connect
-Hermes</strong>.</td>
+created by <strong>Connect</strong>.</td>
+</tr>
+<tr><td>Backend</td>
+<td>Hermes Agent</td>
+<td>Which runtime answers:
+Hermes, n8n or a custom
+responder.</td>
+</tr>
+<tr><td>Agent key</td>
+<td>generated</td>
+<td>Stable key the responder uses
+to route this agent.</td>
+</tr>
+<tr><td>Model override</td>
+<td>empty</td>
+<td>Provider and model the
+responder should use; empty
+keeps its default. The
+credential stays in the
+responder.</td>
 </tr>
 <tr><td>Tool access mode</td>
 <td>Any model the user
@@ -912,6 +930,33 @@ user could open them.</li>
 user’s own key, so a cached tool list or a prompt injection cannot widen
 either mode. <tt class="docutils literal">odoo_models</tt> lets the assistant discover what it may
 query instead of guessing.</p>
+</div>
+<div class="section" id="giving-the-agent-a-role-instructions-skills-knowledge">
+<h2>Giving the agent a role: instructions, skills, knowledge</h2>
+<p>An agent record is not only a transport endpoint, it carries the
+configuration the responder applies to every conversation:</p>
+<ul class="simple">
+<li><strong>Instructions</strong>: what the agent is for, written by the customer
+administrator.</li>
+<li><strong>Operator instructions</strong>: owned by whoever runs the responder (safety
+rules, tone, escalation). The responder applies them <strong>after</strong> the
+customer instructions, so a customer edit can never weaken an operator
+rule.</li>
+<li><strong>Skills</strong>: reusable blocks of instructions plus the tool names they
+expect (Hermes → Skills). Several agents can share one skill.</li>
+<li><strong>Knowledge</strong>: plain text sources sent as context, capped by
+<em>Knowledge budget</em> so a conversation cannot grow unbounded. Nothing is
+indexed in Odoo: the responder does the retrieval, and a glue module
+can fill the body from <tt class="docutils literal">document_page</tt>.</li>
+<li><strong>Model override</strong>: a provider and a model for this agent
+(<tt class="docutils literal">deepseek</tt> + <tt class="docutils literal"><span class="pre">deepseek-v4-pro</span></tt>). The responder receives
+<tt class="docutils literal"><span class="pre">provider::model</span></tt>; <strong>the provider credential never leaves the
+responder</strong>, so an Odoo administrator can choose the model without
+ever seeing the API key.</li>
+</ul>
+<p>All of it travels in the poll response under <tt class="docutils literal">agent</tt>, plus the stable
+<tt class="docutils literal">agent_key</tt> on every message, so one responder can serve several
+agents with different roles.</p>
 </div>
 <div class="section" id="rendering-and-attachments">
 <h2>Rendering and attachments</h2>

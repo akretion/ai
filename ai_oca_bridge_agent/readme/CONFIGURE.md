@@ -18,7 +18,10 @@
 | Max attempts | 5 | Delivery attempts before the message becomes `dead`. |
 | Long poll timeout | 0 | Up to 20 s of long polling on `/ai_agent/poll`. 0 disables it. |
 | Allow users to connect | off | Show the **Connect Hermes** button in the users' preferences. |
-| Credential validity (days) | 30 | Lifetime of the API key created by **Connect Hermes**. |
+| Credential validity (days) | 30 | Lifetime of the API key created by **Connect**. |
+| Backend | Hermes Agent | Which runtime answers: Hermes, n8n or a custom responder. |
+| Agent key | generated | Stable key the responder uses to route this agent. |
+| Model override | empty | Provider and model the responder should use; empty keeps its default. The credential stays in the responder. |
 | Tool access mode | Any model the user may read | Trust the user's own rights, or restrict the assistant to the Tools list. |
 | Models hidden from the assistant | none | Deny list applied in both modes, for data that must not be quoted in a channel. |
 

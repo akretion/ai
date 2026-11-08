@@ -6,3 +6,7 @@ access_agent_message_manager,ai.bridge.agent.message manager,model_ai_bridge_age
 access_agent_credential_manager,ai.bridge.agent.credential manager,model_ai_bridge_agent_credential,base.group_system,1,1,1,1
 access_agent_tool_user,ai.bridge.agent.tool user,model_ai_bridge_agent_tool,group_agent_user,1,0,0,0
 access_agent_tool_manager,ai.bridge.agent.tool manager,model_ai_bridge_agent_tool,base.group_system,1,1,1,1
+access_agent_skill_user,ai.bridge.agent.skill user,model_ai_bridge_agent_skill,group_agent_user,1,0,0,0
+access_agent_skill_manager,ai.bridge.agent.skill manager,model_ai_bridge_agent_skill,base.group_system,1,1,1,1
+access_agent_knowledge_user,ai.bridge.agent.knowledge user,model_ai_bridge_agent_knowledge,group_agent_user,1,0,0,0
+access_agent_knowledge_manager,ai.bridge.agent.knowledge manager,model_ai_bridge_agent_knowledge,base.group_system,1,1,1,1

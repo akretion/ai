@@ -11,6 +11,7 @@ from datetime import timedelta
 
 from odoo import _, api, fields, models
 from odoo.release import version as odoo_version
+from odoo.tools.mail import html2plaintext
 
 
 class AiBridgeAgent(models.Model):
@@ -187,6 +188,105 @@ class AiBridgeAgent(models.Model):
         "generic assistant capabilities.",
     )
 
+    # ------------------------------------------------------- agent definition
+    agent_key = fields.Char(
+        required=True,
+        copy=False,
+        index=True,
+        default=lambda self: secrets.token_hex(6),
+        help="Stable key published to the responder, e.g. 'support'.",
+    )
+    backend = fields.Selection(
+        [
+            ("hermes", "Hermes Agent"),
+            ("n8n", "n8n workflow"),
+            ("custom", "Another responder"),
+        ],
+        default="hermes",
+        required=True,
+        help="Which runtime answers for this agent. Purely informational for "
+        "the transport, but it tells the responder how to route the agent.",
+    )
+    instructions = fields.Html(
+        help="What this agent is for, written by the customer administrator.",
+    )
+    operator_instructions = fields.Text(
+        help="Instructions owned by whoever operates the responder: safety "
+        "rules, tone, escalation. Sent after the customer instructions.",
+    )
+    skill_ids = fields.Many2many(
+        "ai.bridge.agent.skill",
+        "ai_bridge_agent_skill_rel",
+        "agent_id",
+        "skill_id",
+        string="Skills",
+    )
+    knowledge_ids = fields.One2many(
+        "ai.bridge.agent.knowledge",
+        "agent_id",
+        string="Knowledge",
+    )
+    llm_provider = fields.Char(
+        help="Provider the responder should use for this agent, e.g. deepseek. "
+        "Leave empty to keep the responder default. The provider credential "
+        "stays in the responder, never here.",
+    )
+    llm_model = fields.Char(
+        help="Model override, e.g. deepseek-v4-pro. Empty keeps the default.",
+    )
+    knowledge_max_chars = fields.Integer(
+        default=8000,
+        help="Budget for the knowledge sent with each conversation.",
+    )
+
+    _sql_constraints = [
+        (
+            "agent_key_uniq",
+            "unique(agent_key)",
+            "The agent key must be unique: it identifies the agent for the "
+            "responder.",
+        ),
+    ]
+
+    def _agent_instructions_plaintext(self, value, limit=20000):
+        text = html2plaintext(value or "") if value else ""
+        text = text.strip()
+        return text[:limit]
+
+    def _get_agent_definition(self):
+        """Describe this agent for the responder.
+
+        Composed in a fixed order so an operator rule can never be weakened by
+        customer text: the responder applies operator instructions last.
+        """
+        self.ensure_one()
+        budget = self.knowledge_max_chars or 8000
+        knowledge = []
+        used = 0
+        for item in self.knowledge_ids.filtered("active"):
+            text = self._agent_instructions_plaintext(item.body, limit=budget)
+            if not text:
+                continue
+            if used + len(text) > budget:
+                break
+            knowledge.append({"name": item.name, "text": text})
+            used += len(text)
+        return {
+            "key": self.agent_key,
+            "name": self.name,
+            "backend": self.backend,
+            "instructions": self._agent_instructions_plaintext(self.instructions),
+            "operator_instructions": (self.operator_instructions or "").strip(),
+            "skills": [
+                skill._as_skill_dict() for skill in self.skill_ids.filtered("active")
+            ],
+            "knowledge": knowledge,
+            "llm": {
+                "provider": (self.llm_provider or "").strip(),
+                "model": (self.llm_model or "").strip(),
+            },
+        }
+
     @api.model
     def _default_tenant_key(self):
         """Return the tenant key of this database, creating it once."""
@@ -328,6 +428,8 @@ class AiBridgeAgent(models.Model):
             "tenant": self._get_tenant_info(),
             "event": "message.created",
             "agent_id": self.id,
+            "agent_key": self.agent_key,
+            "agent": self._get_agent_definition(),
             "session_key": session_key,
             "delivery_id": message.delivery_id,
             "message": {

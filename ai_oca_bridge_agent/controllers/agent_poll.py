@@ -72,6 +72,7 @@ class AgentPoll(http.Controller):
                     "session_key": message.session_key,
                     "db_hash": message.db_hash,
                     "delivery_id": message.delivery_id,
+                    "agent_key": agent.agent_key,
                     "capabilities": agent._get_capabilities(message),
                     "create_date": message.create_date.isoformat()
                     if message.create_date
@@ -82,6 +83,8 @@ class AgentPoll(http.Controller):
         return {
             "status": "ok",
             "agent_id": agent.id,
+            "agent_key": agent.agent_key,
             "tenant": agent._get_tenant_info(),
+            "agent": agent._get_agent_definition(),
             "messages": payload,
         }

@@ -328,8 +328,20 @@ Agent settings
 |                      |                      | preferences.                  |
 +----------------------+----------------------+-------------------------------+
 | Credential validity  | 30                   | Lifetime of the API key       |
-| (days)               |                      | created by **Connect          |
-|                      |                      | Hermes**.                     |
+| (days)               |                      | created by **Connect**.       |
++----------------------+----------------------+-------------------------------+
+| Backend              | Hermes Agent         | Which runtime answers:        |
+|                      |                      | Hermes, n8n or a custom       |
+|                      |                      | responder.                    |
++----------------------+----------------------+-------------------------------+
+| Agent key            | generated            | Stable key the responder uses |
+|                      |                      | to route this agent.          |
++----------------------+----------------------+-------------------------------+
+| Model override       | empty                | Provider and model the        |
+|                      |                      | responder should use; empty   |
+|                      |                      | keeps its default. The        |
+|                      |                      | credential stays in the       |
+|                      |                      | responder.                    |
 +----------------------+----------------------+-------------------------------+
 | Tool access mode     | Any model the user   | Trust the user's own rights,  |
 |                      | may read             | or restrict the assistant to  |
@@ -531,6 +543,34 @@ The agent checks every call with Odoo before running it and uses the
 user's own key, so a cached tool list or a prompt injection cannot widen
 either mode. ``odoo_models`` lets the assistant discover what it may
 query instead of guessing.
+
+Giving the agent a role: instructions, skills, knowledge
+--------------------------------------------------------
+
+An agent record is not only a transport endpoint, it carries the
+configuration the responder applies to every conversation:
+
+- **Instructions**: what the agent is for, written by the customer
+  administrator.
+- **Operator instructions**: owned by whoever runs the responder (safety
+  rules, tone, escalation). The responder applies them **after** the
+  customer instructions, so a customer edit can never weaken an operator
+  rule.
+- **Skills**: reusable blocks of instructions plus the tool names they
+  expect (Hermes → Skills). Several agents can share one skill.
+- **Knowledge**: plain text sources sent as context, capped by
+  *Knowledge budget* so a conversation cannot grow unbounded. Nothing is
+  indexed in Odoo: the responder does the retrieval, and a glue module
+  can fill the body from ``document_page``.
+- **Model override**: a provider and a model for this agent
+  (``deepseek`` + ``deepseek-v4-pro``). The responder receives
+  ``provider::model``; **the provider credential never leaves the
+  responder**, so an Odoo administrator can choose the model without
+  ever seeing the API key.
+
+All of it travels in the poll response under ``agent``, plus the stable
+``agent_key`` on every message, so one responder can serve several
+agents with different roles.
 
 Rendering and attachments
 -------------------------

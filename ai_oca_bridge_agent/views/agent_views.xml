@@ -112,6 +112,78 @@
                             <field name="max_attempts" />
                         </group>
                     </group>
+                    <notebook>
+                        <page string="Instructions" name="instructions">
+                            <field
+                                name="instructions"
+                                placeholder="What is this agent for? Which rules must it follow? Written by the customer administrator."
+                            />
+                            <group string="Operator instructions">
+                                <field
+                                    name="operator_instructions"
+                                    colspan="2"
+                                    nolabel="1"
+                                    placeholder="Owned by whoever runs the responder: safety rules, tone, escalation. Applied after the instructions above."
+                                />
+                            </group>
+                        </page>
+                        <page string="Skills" name="skills">
+                            <field
+                                name="skill_ids"
+                                widget="many2many_tags"
+                                options="{'no_create': False}"
+                            />
+                            <p class="text-muted">
+                                A skill is a block of instructions plus the
+                                tools it expects. Managed in Hermes → Skills.
+                            </p>
+                        </page>
+                        <page string="Knowledge" name="knowledge">
+                            <field name="knowledge_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle" />
+                                    <field name="name" />
+                                    <field name="source_url" />
+                                    <field name="active" />
+                                </list>
+                                <form>
+                                    <group>
+                                        <field name="name" />
+                                        <field name="source_url" />
+                                        <field name="active" />
+                                    </group>
+                                    <field name="body" />
+                                </form>
+                            </field>
+                            <group>
+                                <field name="knowledge_max_chars" />
+                            </group>
+                        </page>
+                        <page string="Model" name="model">
+                            <group>
+                                <group string="Responder">
+                                    <field name="backend" />
+                                    <field name="agent_key" />
+                                </group>
+                                <group string="Model override">
+                                    <field
+                                        name="llm_provider"
+                                        placeholder="deepseek, openai, nous…"
+                                    />
+                                    <field
+                                        name="llm_model"
+                                        placeholder="deepseek-v4-pro"
+                                    />
+                                </group>
+                            </group>
+                            <p class="text-muted">
+                                The provider credential stays in the responder.
+                                Odoo only says which provider and model to use
+                                for this agent; empty keeps the deployment
+                                default.
+                            </p>
+                        </page>
+                    </notebook>
                     <group string="Channels">
                         <field
                             name="channel_ids"
