@@ -553,9 +553,9 @@ own-messages-only rule for non-managers;</li>
 <h2>Gateway settings</h2>
 <table border="1" class="docutils">
 <colgroup>
-<col width="34%" />
-<col width="23%" />
-<col width="42%" />
+<col width="29%" />
+<col width="29%" />
+<col width="41%" />
 </colgroup>
 <thead valign="bottom">
 <tr><th class="head">Setting</th>
@@ -578,7 +578,8 @@ assistant. System
 administrators always keep
 access.</td>
 </tr>
-<tr><td>Access denied message</td>
+<tr><td>Access denied
+message</td>
 <td>built-in text</td>
 <td>Standard answer for users
 outside the allowed groups.</td>
@@ -590,8 +591,8 @@ outside the allowed groups.</td>
 denial answers in one channel
 (<tt class="docutils literal">0</tt> = every message).</td>
 </tr>
-<tr><td>Require an Odoo API key
-for tools</td>
+<tr><td>Require an Odoo API
+key for tools</td>
 <td>on</td>
 <td>Announce <tt class="docutils literal">odoo_rpc</tt> only
 for users owning an API key.</td>
@@ -655,7 +656,8 @@ message becomes <tt class="docutils literal">dead</tt>.</td>
 <tt class="docutils literal">/hermes/poll</tt>. 0 disables
 it.</td>
 </tr>
-<tr><td>Allow users to connect</td>
+<tr><td>Allow users to
+connect</td>
 <td>off</td>
 <td>Show the <strong>Connect Hermes</strong>
 button in the users’
@@ -667,6 +669,20 @@ preferences.</td>
 <td>Lifetime of the API key
 created by <strong>Connect
 Hermes</strong>.</td>
+</tr>
+<tr><td>Tool access mode</td>
+<td>Any model the user
+may read</td>
+<td>Trust the user’s own rights,
+or restrict the assistant to
+the Tools list.</td>
+</tr>
+<tr><td>Models hidden from
+the assistant</td>
+<td>none</td>
+<td>Deny list applied in both
+modes, for data that must not
+be quoted in a channel.</td>
 </tr>
 </tbody>
 </table>
@@ -841,23 +857,30 @@ reconnects.</p>
 </div>
 <div class="section" id="letting-the-assistant-use-odoo-tools">
 <h2>Letting the assistant use Odoo tools</h2>
-<p>A connected user can also let the assistant <em>query</em> Odoo through a
-whitelist the customer controls: <strong>Hermes → Tools</strong>.</p>
-<p>Each record opens one model with one read method (<tt class="docutils literal">search_read</tt>,
-<tt class="docutils literal">read</tt>, <tt class="docutils literal">fields_get</tt>, <tt class="docutils literal">read_group</tt>), for the groups you choose,
-with a row cap and an optional field list. Two defaults ship for every
-internal user: <tt class="docutils literal">partners</tt> and <tt class="docutils literal">products</tt>, read only. To give a power
-user more, add a record for the model they need and put them in a
-dedicated group: nothing else changes, and the regular users never see
-it.</p>
-<p><tt class="docutils literal">fields_get</tt> and <tt class="docutils literal">search_count</tt> are implied by any read grant on the
-same model: the assistant can inspect the schema it may read and count
-rows without paging through them (a “how many invoices this month”
-answer costs one call instead of forty).</p>
-<p>The gateway checks every call against these records before running it,
-with the user’s own API key: a stale tool list or a prompt injection
-cannot widen what the whitelist allows, and writes are not exposed at
-all yet.</p>
+<p>A connected user can also let the assistant <em>query</em> Odoo. The default
+policy is <strong>Any model the user may read</strong> (<tt class="docutils literal">tool_access_mode</tt> on the
+gateway): the assistant inherits the user’s own API key, so it can read
+exactly what that user can read in the interface, and nothing else. Read
+methods only (<tt class="docutils literal">search_read</tt>, <tt class="docutils literal">read</tt>, <tt class="docutils literal">fields_get</tt>,
+<tt class="docutils literal">search_count</tt>, <tt class="docutils literal">read_group</tt>); no write is exposed yet.</p>
+<p>Two optional restrictions, for customers who want to be stricter than
+Odoo’s own access rights:</p>
+<ul class="simple">
+<li><strong>Only the Tools list</strong> (<tt class="docutils literal">tool_access_mode = whitelist</tt>): the
+assistant may only touch the models listed under <strong>Hermes → Tools</strong>,
+for the groups bound to each record. Each record carries one model,
+one method, a row cap and an optional field list. <tt class="docutils literal">fields_get</tt> and
+<tt class="docutils literal">search_count</tt> are implied by a read grant on the same model.</li>
+<li><strong>Models hidden from the assistant</strong>: a deny list that applies in both
+modes. Its real use is not secrecy but privacy in the channel — an
+answer is posted in Discuss where other members read it, so a customer
+may keep payroll or contracts out of the assistant even though the
+user could open them.</li>
+</ul>
+<p>The gateway checks every call with Odoo before running it and uses the
+user’s own key, so a cached tool list or a prompt injection cannot widen
+either mode. <tt class="docutils literal">odoo_models</tt> lets the assistant discover what it may
+query instead of guessing.</p>
 </div>
 <div class="section" id="troubleshooting">
 <h2>Troubleshooting</h2>

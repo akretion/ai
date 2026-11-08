@@ -111,11 +111,34 @@ class HermesToolsController(http.Controller):
             return user
         if not gateway._is_user_allowed(user):
             return {"status": "error", "error": "user_not_allowed"}
-        tools = request.env["hermes.tool"].sudo()._for_user(user)
+        tools = request.env["hermes.tool"].sudo()
         return {
             "status": "ok",
-            "tools": [tool._as_tool_dict() for tool in tools],
+            "mode": gateway.tool_access_mode,
+            "tools": [tool._as_tool_dict() for tool in tools._for_user(user)],
+            "models": tools._readable_models(user, gateway)[:500],
         }
+
+    @http.route(
+        "/hermes/tools/models",
+        type="json",
+        auth="public",
+        methods=["POST"],
+        csrf=False,
+    )
+    def hermes_tools_models(self, **kwargs):
+        """Models the assistant may query for this user, so it can discover."""
+        gateway = self._get_gateway()
+        if not gateway:
+            return {"status": "error", "error": "invalid_token"}
+        data = request.get_json_data() or {}
+        user = self._get_user(data.get("user_id"))
+        if isinstance(user, dict):
+            return user
+        if not gateway._is_user_allowed(user):
+            return {"status": "error", "error": "user_not_allowed"}
+        models = request.env["hermes.tool"].sudo()._readable_models(user, gateway)[:500]
+        return {"status": "ok", "mode": gateway.tool_access_mode, "models": models}
 
     @http.route(
         "/hermes/tools/resolve",
@@ -148,6 +171,7 @@ class HermesToolsController(http.Controller):
                 user,
                 (data.get("model") or "").strip(),
                 (data.get("method") or "search_read").strip(),
+                gateway=gateway,
             )
         if not tool:
             return {"status": "error", "error": "tool_not_allowed"}

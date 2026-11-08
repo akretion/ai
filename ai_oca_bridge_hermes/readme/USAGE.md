@@ -129,24 +129,28 @@ hand-off is therefore one-shot: if the gateway loses it, the user reconnects.
 
 ## Letting the assistant use Odoo tools
 
-A connected user can also let the assistant *query* Odoo through a whitelist
-the customer controls: **Hermes → Tools**.
+A connected user can also let the assistant *query* Odoo. The default policy is
+**Any model the user may read** (`tool_access_mode` on the gateway): the
+assistant inherits the user's own API key, so it can read exactly what that user
+can read in the interface, and nothing else. Read methods only (`search_read`,
+`read`, `fields_get`, `search_count`, `read_group`); no write is exposed yet.
 
-Each record opens one model with one read method (`search_read`, `read`,
-`fields_get`, `read_group`), for the groups you choose, with a row cap and an
-optional field list. Two defaults ship for every internal user: `partners` and
-`products`, read only. To give a power user more, add a record for the model
-they need and put them in a dedicated group: nothing else changes, and the
-regular users never see it.
+Two optional restrictions, for customers who want to be stricter than Odoo's own
+access rights:
 
-`fields_get` and `search_count` are implied by any read grant on the same
-model: the assistant can inspect the schema it may read and count rows without
-paging through them (a "how many invoices this month" answer costs one call
-instead of forty).
+- **Only the Tools list** (`tool_access_mode = whitelist`): the assistant may
+  only touch the models listed under **Hermes → Tools**, for the groups
+  bound to each record. Each record carries one model, one method, a row cap and
+  an optional field list. `fields_get` and `search_count` are implied by a read
+  grant on the same model.
+- **Models hidden from the assistant**: a deny list that applies in both modes.
+  Its real use is not secrecy but privacy in the channel — an answer is posted
+  in Discuss where other members read it, so a customer may keep payroll or
+  contracts out of the assistant even though the user could open them.
 
-The gateway checks every call against these records before running it, with the
-user's own API key: a stale tool list or a prompt injection cannot widen what
-the whitelist allows, and writes are not exposed at all yet.
+The gateway checks every call with Odoo before running it and uses the user's
+own key, so a cached tool list or a prompt injection cannot widen either mode.
+`odoo_models` lets the assistant discover what it may query instead of guessing.
 
 ## Troubleshooting
 

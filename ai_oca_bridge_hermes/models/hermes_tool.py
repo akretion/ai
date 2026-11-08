@@ -3,6 +3,8 @@
 
 from odoo import api, fields, models
 
+READ_METHODS = ("search_read", "read", "fields_get", "search_count", "read_group")
+
 METHOD_SELECTION = [
     ("search_read", "Search and read"),
     ("read", "Read by ids"),
@@ -80,7 +82,65 @@ class HermesTool(models.Model):
         return tools[:1]._as_tool_dict() if tools else None
 
     @api.model
-    def _resolve_for_user_model(self, user, model_name, method):
+    def _user_can_read(self, user, model_name):
+        """True when that user may read the model at all (ACL, not records)."""
+        if model_name not in self.env:
+            return False
+        model_env = self.env[model_name].with_user(user)
+        # 18.0: check_access() on an empty recordset checks the model-level ACL;
+        # 16.0 has no check_access(), check_access_rights() does the same there.
+        checker = getattr(model_env, "check_access", None)
+        if checker is not None:
+            try:
+                model_env.browse().check_access("read")
+                return True
+            except Exception:  # noqa: BLE001 - AccessError, or no access at all
+                return False
+        try:
+            return bool(model_env.check_access_rights("read", raise_exception=False))
+        except Exception:  # noqa: BLE001 - unavailable model, treat as denied
+            return False
+
+    @api.model
+    def _open_access_grants(self, user, model_name, method, gateway):
+        """Trust the user's own API key: read whatever they may read."""
+        if method not in READ_METHODS:
+            return None
+        model = (
+            self.env["ir.model"].sudo().search([("model", "=", model_name)], limit=1)
+        )
+        if not model:
+            return None
+        if not self._user_can_read(user, model_name):
+            return None
+        return {
+            "name": model.display_name,
+            "description": model.display_name,
+            "model": model_name,
+            "method": method,
+            "max_limit": 80,
+            "fields": [],
+        }
+
+    @api.model
+    def _readable_models(self, user, gateway=None):
+        """Models the assistant may query for this user, for discovery."""
+        if gateway and gateway.tool_access_mode == "whitelist":
+            names = self._for_user(user).mapped("model_name")
+        else:
+            excluded = (
+                gateway.tool_excluded_model_ids.mapped("model") if gateway else []
+            )
+            names = []
+            for model in self.env["ir.model"].sudo().search([]):
+                if model.model in excluded or model.model not in self.env:
+                    continue
+                if self._user_can_read(user, model.model):
+                    names.append(model.model)
+        return sorted(set(names))
+
+    @api.model
+    def _resolve_for_user_model(self, user, model_name, method, gateway=None):
         """Grant lookup by (model, method): how the gateway validates a call.
 
         ``fields_get`` only exposes the schema Odoo already filters by access
@@ -90,6 +150,8 @@ class HermesTool(models.Model):
         assistant does not have to page through thousands of rows to answer
         "how many".
         """
+        if gateway and model_name in gateway.tool_excluded_model_ids.mapped("model"):
+            return None
         grants = self._for_user(user).filtered(
             lambda tool: tool.model_name == model_name and tool.method == method
         )
@@ -97,11 +159,14 @@ class HermesTool(models.Model):
             grants = self._for_user(user).filtered(
                 lambda tool: tool.model_name == model_name
             )
-        if not grants:
+        if grants:
+            tool = grants[:1]._as_tool_dict()
+            tool["method"] = method
+            return tool
+        mode = gateway.tool_access_mode if gateway else "open"
+        if mode != "open":
             return None
-        tool = grants[:1]._as_tool_dict()
-        tool["method"] = method
-        return tool
+        return self._open_access_grants(user, model_name, method, gateway)
 
     def _as_tool_dict(self):
         self.ensure_one()

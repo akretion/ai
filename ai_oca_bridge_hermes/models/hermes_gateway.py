@@ -157,6 +157,28 @@ class HermesGateway(models.Model):
         default=30,
         help="Validity of the API key a user hands over from their preferences.",
     )
+    tool_access_mode = fields.Selection(
+        [
+            ("open", "Any model the user may read"),
+            ("whitelist", "Only the Tools list"),
+        ],
+        default="open",
+        required=True,
+        help="'Any model the user may read' trusts the user's own API key and "
+        "access rights: the assistant can read whatever that user can read in "
+        "the UI, read methods only. 'Only the Tools list' restricts the "
+        "assistant to the explicit grants below, which is stricter than the "
+        "user's own rights.",
+    )
+    tool_excluded_model_ids = fields.Many2many(
+        "ir.model",
+        "hermes_gateway_excluded_model_rel",
+        "gateway_id",
+        "model_id",
+        string="Models hidden from the assistant",
+        help="Models the assistant may not query even when the user can read "
+        "them, e.g. because answers are posted in a channel other people read.",
+    )
     require_api_key_for_tools = fields.Boolean(
         default=True,
         help="Only tell the gateway that it may call Odoo on behalf of a user "

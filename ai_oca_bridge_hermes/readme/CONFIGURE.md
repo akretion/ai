@@ -19,6 +19,8 @@
 | Long poll timeout | 0 | Up to 20 s of long polling on `/hermes/poll`. 0 disables it. |
 | Allow users to connect | off | Show the **Connect Hermes** button in the users' preferences. |
 | Credential validity (days) | 30 | Lifetime of the API key created by **Connect Hermes**. |
+| Tool access mode | Any model the user may read | Trust the user's own rights, or restrict the assistant to the Tools list. |
+| Models hidden from the assistant | none | Deny list applied in both modes, for data that must not be quoted in a channel. |
 
 ## Recommended presets
 

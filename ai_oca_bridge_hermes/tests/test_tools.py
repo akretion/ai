@@ -25,6 +25,9 @@ class TestHermesTools(TransactionCase):
                 "groups_id": [(6, 0, [cls.env.ref("base.group_user").id])],
             }
         )
+        cls.gateway = cls.env["hermes.gateway"].create(
+            {"name": "Tools Gateway", "ai_user_id": cls.user.id}
+        )
         cls.power_group = cls.env["res.groups"].create({"name": "Hermes Power Users"})
         cls.env.ref("ai_oca_bridge_hermes.tool_partners").allowed_group_ids = [
             (6, 0, [cls.env.ref("base.group_user").id])
@@ -98,15 +101,69 @@ class TestHermesTools(TransactionCase):
     def test_implied_search_count_does_not_grant_reading(self):
         self.assertIsNone(
             self.env["hermes.tool"]._resolve_for_user_model(
-                self.user, "account.move", "search_count"
+                self.user, "ir.config_parameter", "search_count"
             )
         )
 
     def test_implied_fields_get_does_not_grant_reading(self):
         tool = self.env["hermes.tool"]._resolve_for_user_model(
-            self.user, "sale.order", "fields_get"
+            self.user, "ir.config_parameter", "fields_get"
         )
         self.assertIsNone(tool)
+
+    def test_open_mode_allows_any_model_the_user_may_read(self):
+        tool = self.env["hermes.tool"]._resolve_for_user_model(
+            self.user, "mail.message", "search_read", gateway=self.gateway
+        )
+        self.assertIsNotNone(tool)
+        self.assertEqual(tool["model"], "mail.message")
+        self.assertEqual(tool["max_limit"], 80)
+
+    def test_open_mode_refuses_a_model_the_user_may_not_read(self):
+        self.assertIsNone(
+            self.env["hermes.tool"]._resolve_for_user_model(
+                self.user,
+                "ir.config_parameter",
+                "search_read",
+                gateway=self.gateway,
+            )
+        )
+
+    def test_open_mode_refuses_writing_methods(self):
+        for method in ("create", "write", "unlink"):
+            self.assertIsNone(
+                self.env["hermes.tool"]._resolve_for_user_model(
+                    self.user, "res.partner", method, gateway=self.gateway
+                )
+            )
+
+    def test_excluded_model_is_refused_even_if_readable(self):
+        self.gateway.tool_excluded_model_ids = [
+            (6, 0, [self.env.ref("base.model_res_partner").id])
+        ]
+        self.assertIsNone(
+            self.env["hermes.tool"]._resolve_for_user_model(
+                self.user, "res.partner", "search_read", gateway=self.gateway
+            )
+        )
+
+    def test_whitelist_mode_keeps_open_models_out(self):
+        self.gateway.tool_access_mode = "whitelist"
+        self.assertIsNone(
+            self.env["hermes.tool"]._resolve_for_user_model(
+                self.user, "mail.message", "search_read", gateway=self.gateway
+            )
+        )
+        self.assertIsNotNone(
+            self.env["hermes.tool"]._resolve_for_user_model(
+                self.user, "res.partner", "search_read", gateway=self.gateway
+            )
+        )
+
+    def test_readable_models_lists_only_what_the_user_may_read(self):
+        models = self.env["hermes.tool"]._readable_models(self.user, self.gateway)
+        self.assertIn("res.partner", models)
+        self.assertNotIn("ir.config_parameter", models)
 
     def test_user_without_group_has_no_tool(self):
         tool_model = self.env["hermes.tool"]

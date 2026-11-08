@@ -226,76 +226,84 @@ Configuration
 Gateway settings
 ----------------
 
-+-------------------------+-----------------+-------------------------------+
-| Setting                 | Default         | What it does                  |
-+=========================+=================+===============================+
-| AI User                 | required        | Odoo user the answers are     |
-|                         |                 | posted as. Must be linked to  |
-|                         |                 | an ``ai.bridge`` with usage   |
-|                         |                 | *Hermes*.                     |
-+-------------------------+-----------------+-------------------------------+
-| Allowed groups          | *Use Hermes AI* | Who may chat with the         |
-|                         |                 | assistant. System             |
-|                         |                 | administrators always keep    |
-|                         |                 | access.                       |
-+-------------------------+-----------------+-------------------------------+
-| Access denied message   | built-in text   | Standard answer for users     |
-|                         |                 | outside the allowed groups.   |
-+-------------------------+-----------------+-------------------------------+
-| Denial cooldown         | 30              | Minimum delay between two     |
-| (minutes)               |                 | denial answers in one channel |
-|                         |                 | (``0`` = every message).      |
-+-------------------------+-----------------+-------------------------------+
-| Require an Odoo API key | on              | Announce ``odoo_rpc`` only    |
-| for tools               |                 | for users owning an API key.  |
-+-------------------------+-----------------+-------------------------------+
-| Tenant key              | generated       | Stable database identifier    |
-|                         |                 | shared by every gateway of    |
-|                         |                 | the database. Do not edit.    |
-+-------------------------+-----------------+-------------------------------+
-| Environment             | prod            | ``prod``/``staging``/``dev``, |
-|                         |                 | part of the Hermes session    |
-|                         |                 | key.                          |
-+-------------------------+-----------------+-------------------------------+
-| Session scope           | per user        | One persistent Hermes         |
-|                         |                 | conversation per user, or per |
-|                         |                 | channel.                      |
-+-------------------------+-----------------+-------------------------------+
-| Push enabled            | off             | Real-time push of the events  |
-|                         |                 | to ``push_url``. Empty =      |
-|                         |                 | polling only.                 |
-+-------------------------+-----------------+-------------------------------+
-| Push secret             | generated       | HMAC secret used in both      |
-|                         |                 | directions. Shown to system   |
-|                         |                 | administrators.               |
-+-------------------------+-----------------+-------------------------------+
-| Webhook token           | generated       | Token of the polling          |
-|                         |                 | transport. Rotating it keeps  |
-|                         |                 | the previous one valid for    |
-|                         |                 | ``token_grace_minutes``.      |
-+-------------------------+-----------------+-------------------------------+
-| Max batch size          | 50              | Messages claimed per poll or  |
-|                         |                 | pushed per cron run.          |
-+-------------------------+-----------------+-------------------------------+
-| Claim TTL (minutes)     | 5               | Delay before an unanswered    |
-|                         |                 | message is handed back to the |
-|                         |                 | queue.                        |
-+-------------------------+-----------------+-------------------------------+
-| Max attempts            | 5               | Delivery attempts before the  |
-|                         |                 | message becomes ``dead``.     |
-+-------------------------+-----------------+-------------------------------+
-| Long poll timeout       | 0               | Up to 20 s of long polling on |
-|                         |                 | ``/hermes/poll``. 0 disables  |
-|                         |                 | it.                           |
-+-------------------------+-----------------+-------------------------------+
-| Allow users to connect  | off             | Show the **Connect Hermes**   |
-|                         |                 | button in the users'          |
-|                         |                 | preferences.                  |
-+-------------------------+-----------------+-------------------------------+
-| Credential validity     | 30              | Lifetime of the API key       |
-| (days)                  |                 | created by **Connect          |
-|                         |                 | Hermes**.                     |
-+-------------------------+-----------------+-------------------------------+
++----------------------+----------------------+-------------------------------+
+| Setting              | Default              | What it does                  |
++======================+======================+===============================+
+| AI User              | required             | Odoo user the answers are     |
+|                      |                      | posted as. Must be linked to  |
+|                      |                      | an ``ai.bridge`` with usage   |
+|                      |                      | *Hermes*.                     |
++----------------------+----------------------+-------------------------------+
+| Allowed groups       | *Use Hermes AI*      | Who may chat with the         |
+|                      |                      | assistant. System             |
+|                      |                      | administrators always keep    |
+|                      |                      | access.                       |
++----------------------+----------------------+-------------------------------+
+| Access denied        | built-in text        | Standard answer for users     |
+| message              |                      | outside the allowed groups.   |
++----------------------+----------------------+-------------------------------+
+| Denial cooldown      | 30                   | Minimum delay between two     |
+| (minutes)            |                      | denial answers in one channel |
+|                      |                      | (``0`` = every message).      |
++----------------------+----------------------+-------------------------------+
+| Require an Odoo API  | on                   | Announce ``odoo_rpc`` only    |
+| key for tools        |                      | for users owning an API key.  |
++----------------------+----------------------+-------------------------------+
+| Tenant key           | generated            | Stable database identifier    |
+|                      |                      | shared by every gateway of    |
+|                      |                      | the database. Do not edit.    |
++----------------------+----------------------+-------------------------------+
+| Environment          | prod                 | ``prod``/``staging``/``dev``, |
+|                      |                      | part of the Hermes session    |
+|                      |                      | key.                          |
++----------------------+----------------------+-------------------------------+
+| Session scope        | per user             | One persistent Hermes         |
+|                      |                      | conversation per user, or per |
+|                      |                      | channel.                      |
++----------------------+----------------------+-------------------------------+
+| Push enabled         | off                  | Real-time push of the events  |
+|                      |                      | to ``push_url``. Empty =      |
+|                      |                      | polling only.                 |
++----------------------+----------------------+-------------------------------+
+| Push secret          | generated            | HMAC secret used in both      |
+|                      |                      | directions. Shown to system   |
+|                      |                      | administrators.               |
++----------------------+----------------------+-------------------------------+
+| Webhook token        | generated            | Token of the polling          |
+|                      |                      | transport. Rotating it keeps  |
+|                      |                      | the previous one valid for    |
+|                      |                      | ``token_grace_minutes``.      |
++----------------------+----------------------+-------------------------------+
+| Max batch size       | 50                   | Messages claimed per poll or  |
+|                      |                      | pushed per cron run.          |
++----------------------+----------------------+-------------------------------+
+| Claim TTL (minutes)  | 5                    | Delay before an unanswered    |
+|                      |                      | message is handed back to the |
+|                      |                      | queue.                        |
++----------------------+----------------------+-------------------------------+
+| Max attempts         | 5                    | Delivery attempts before the  |
+|                      |                      | message becomes ``dead``.     |
++----------------------+----------------------+-------------------------------+
+| Long poll timeout    | 0                    | Up to 20 s of long polling on |
+|                      |                      | ``/hermes/poll``. 0 disables  |
+|                      |                      | it.                           |
++----------------------+----------------------+-------------------------------+
+| Allow users to       | off                  | Show the **Connect Hermes**   |
+| connect              |                      | button in the users'          |
+|                      |                      | preferences.                  |
++----------------------+----------------------+-------------------------------+
+| Credential validity  | 30                   | Lifetime of the API key       |
+| (days)               |                      | created by **Connect          |
+|                      |                      | Hermes**.                     |
++----------------------+----------------------+-------------------------------+
+| Tool access mode     | Any model the user   | Trust the user's own rights,  |
+|                      | may read             | or restrict the assistant to  |
+|                      |                      | the Tools list.               |
++----------------------+----------------------+-------------------------------+
+| Models hidden from   | none                 | Deny list applied in both     |
+| the assistant        |                      | modes, for data that must not |
+|                      |                      | be quoted in a channel.       |
++----------------------+----------------------+-------------------------------+
 
 Recommended presets
 -------------------
@@ -463,26 +471,31 @@ reconnects.
 Letting the assistant use Odoo tools
 ------------------------------------
 
-A connected user can also let the assistant *query* Odoo through a
-whitelist the customer controls: **Hermes → Tools**.
+A connected user can also let the assistant *query* Odoo. The default
+policy is **Any model the user may read** (``tool_access_mode`` on the
+gateway): the assistant inherits the user's own API key, so it can read
+exactly what that user can read in the interface, and nothing else. Read
+methods only (``search_read``, ``read``, ``fields_get``,
+``search_count``, ``read_group``); no write is exposed yet.
 
-Each record opens one model with one read method (``search_read``,
-``read``, ``fields_get``, ``read_group``), for the groups you choose,
-with a row cap and an optional field list. Two defaults ship for every
-internal user: ``partners`` and ``products``, read only. To give a power
-user more, add a record for the model they need and put them in a
-dedicated group: nothing else changes, and the regular users never see
-it.
+Two optional restrictions, for customers who want to be stricter than
+Odoo's own access rights:
 
-``fields_get`` and ``search_count`` are implied by any read grant on the
-same model: the assistant can inspect the schema it may read and count
-rows without paging through them (a "how many invoices this month"
-answer costs one call instead of forty).
+- **Only the Tools list** (``tool_access_mode = whitelist``): the
+  assistant may only touch the models listed under **Hermes → Tools**,
+  for the groups bound to each record. Each record carries one model,
+  one method, a row cap and an optional field list. ``fields_get`` and
+  ``search_count`` are implied by a read grant on the same model.
+- **Models hidden from the assistant**: a deny list that applies in both
+  modes. Its real use is not secrecy but privacy in the channel — an
+  answer is posted in Discuss where other members read it, so a customer
+  may keep payroll or contracts out of the assistant even though the
+  user could open them.
 
-The gateway checks every call against these records before running it,
-with the user's own API key: a stale tool list or a prompt injection
-cannot widen what the whitelist allows, and writes are not exposed at
-all yet.
+The gateway checks every call with Odoo before running it and uses the
+user's own key, so a cached tool list or a prompt injection cannot widen
+either mode. ``odoo_models`` lets the assistant discover what it may
+query instead of guessing.
 
 Troubleshooting
 ---------------

@@ -77,6 +77,20 @@
                             <field name="denial_cooldown_minutes" />
                         </group>
                     </group>
+                    <group string="Odoo tools for the assistant">
+                        <group>
+                            <field name="allow_user_connect" />
+                            <field name="credential_ttl_days" />
+                        </group>
+                        <group>
+                            <field name="tool_access_mode" />
+                            <field
+                                name="tool_excluded_model_ids"
+                                widget="many2many_tags"
+                                options="{'no_create': True}"
+                            />
+                        </group>
+                    </group>
                     <group string="Realtime push">
                         <field name="push_enabled" />
                         <field name="push_url" />
