@@ -18,8 +18,8 @@ class AiBridgeAgentSkill(models.Model):
         "above stays for tools the responder owns (browser, terminal).",
     )
 
-    def _as_skill_dict(self):
-        values = super()._as_skill_dict()
+    def _as_skill_dict(self, lazy=False):
+        values = super()._as_skill_dict(lazy=lazy)
         declared = self.tool_ids.mapped("name")
         values["tools"] = list(dict.fromkeys(values["tools"] + declared))
         values["declared_tools"] = [
