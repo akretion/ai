@@ -41,6 +41,16 @@ class AiBridgeAgentCredential(models.Model):
     expires_at = fields.Datetime(required=True)
     delivered_at = fields.Datetime(readonly=True)
 
+    def _key_expiry(self, credential):
+        """Expiry of the API key itself, or None when it never expires."""
+        if not credential.key_id or "res.users.apikeys" not in self.env:
+            return None
+        keys = self.env["res.users.apikeys"].sudo().browse(credential.key_id)
+        if not keys.exists() or "expiration_date" not in keys._fields:
+            return None
+        expiry = keys.expiration_date
+        return fields.Datetime.to_string(expiry) if expiry else None
+
     @api.model
     def _fetch_pending(self, agent):
         """Return and burn the credentials waiting for this agent."""
@@ -69,7 +79,11 @@ class AiBridgeAgentCredential(models.Model):
                     "session_key": credential.session_key,
                     "api_key": credential.api_key,
                     "key_id": credential.key_id,
+                    # ``expires_at`` is when the hand-off must be collected: a
+                    # few minutes. The key lives much longer, and the responder
+                    # must judge the credential by the key, not by the envelope.
                     "expires_at": fields.Datetime.to_string(credential.expires_at),
+                    "key_expires_at": self._key_expiry(credential),
                 }
             )
             credential.write(

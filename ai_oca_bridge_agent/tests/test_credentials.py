@@ -136,3 +136,21 @@ class TestAgentCredentials(TransactionCase):
         capabilities = self.agent._get_capabilities(queue)
         self.assertTrue(capabilities["odoo_rpc"])
         self.assertEqual(capabilities["tier"], "full")
+
+    def test_payload_carries_the_key_expiry_not_the_handoff_ttl(self):
+        """The responder must judge the key by its own expiry.
+
+        The hand-off is collected within minutes; the key lives for weeks. Sending
+        only ``expires_at`` made every credential look dead after ten minutes.
+        """
+        admin = self.env.ref("base.user_admin")
+        admin.action_agent_connect()
+        credential = self.env["ai.bridge.agent.credential"].search(
+            [("user_id", "=", admin.id)], order="id desc", limit=1
+        )
+        payload = credential._fetch_pending(self.agent)[0]
+        self.assertIn("key_expires_at", payload)
+        key = self.env["res.users.apikeys"].sudo().browse(credential.key_id)
+        if "expiration_date" in key._fields and key.expiration_date:
+            self.assertTrue(payload["key_expires_at"])
+            self.assertNotEqual(payload["key_expires_at"], payload["expires_at"])
