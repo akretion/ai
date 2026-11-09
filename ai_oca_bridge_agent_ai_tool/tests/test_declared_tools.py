@@ -149,6 +149,34 @@ class TestDeclaredTools(TransactionCase):
         )
         self.assertEqual(len(self.agent._get_declared_tools(self.user)), 1)
 
+    def test_server_action_tool_runs_with_the_tool_args(self):
+        if "server_action_id" not in self.env["ai.tool"]._fields:
+            self.skipTest("ai_tool_server_action is not installed")
+        action = self.env["ir.actions.server"].create(
+            {
+                "name": "Echo the word",
+                "model_id": self.env.ref("base.model_res_partner").id,
+                "state": "code",
+                "code": "action = {'echo': env.context.get('tool_args', {}).get('word')}",
+            }
+        )
+        tool = self.env["ai.tool"].create(
+            {
+                "name": "echo_word",
+                "description": "Echo one word back.",
+                "kind": "server_action",
+                "server_action_id": action.id,
+            }
+        )
+        self.agent.tool_ids = [(6, 0, tool.ids)]
+        result = tool._run_for_user(
+            self.user,
+            {"word": "hello"},
+            record_model="res.partner",
+            record_id=self.partner.id,
+        )
+        self.assertEqual(result.get("echo"), "hello")
+
     def test_readonly_agent_refuses_a_mutating_tool(self):
         self.agent.tool_ids = [(6, 0, self.post_tool.ids)]
         self.assertFalse(self.post_tool.readonly)

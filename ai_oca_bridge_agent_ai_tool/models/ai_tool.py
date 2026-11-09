@@ -151,6 +151,6 @@ class AiTool(models.Model):
             # Raises when a record rule keeps it out of reach for that user.
             record.check_access("read")
         arguments = dict(arguments or {})
-        if tool.kind in ("record", "generic_model"):
+        if record is not None:
             arguments["record"] = record
         return tool._dispatch_for_user(user, arguments)
