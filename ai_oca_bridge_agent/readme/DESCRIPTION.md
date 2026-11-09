@@ -39,9 +39,12 @@ One responder installation can serve many Odoo databases:
 - every database owns a stable `tenant_key` (an `ir.config_parameter`,
   independent from `database.uuid`) and an `environment`
   (`prod`/`staging`/`dev`);
-- the session key is `odoo:<tenant_key>:<environment>:user_<id>`, so a staging
+- the session key is
+  `odoo:<tenant_key>:<environment>:user_<id>:channel_<cid>`, so a staging
   database restored from production never continues the production
-  conversation;
+  conversation, and a new Discuss thread starts a new conversation instead of
+  inheriting the memory of another one (`session_scope` switches back to one
+  memory per user if that is what you want);
 - messages are claimed with `FOR UPDATE SKIP LOCKED`: any number of responder
   workers and Odoo HTTP workers can run concurrently without a duplicate
   delivery;
@@ -69,14 +72,33 @@ The module only publishes the fact (`capabilities` in the envelope) and the
 policy stays on the responder side. `require_api_key_for_tools` decides whether
 a key is mandatory before announcing `odoo_rpc`.
 
-## Read and create under the user's own rights
+## Read under the user's own rights, operate through declared tools
 
-A connected user can let the assistant query Odoo. The default policy follows
-the API key: read methods on any model that user may read, plus `create` (see
-`USAGE.md`), never `write` or `unlink` unless explicitly granted. Two optional
-restrictions exist for customers who want the assistant weaker than its users:
-an explicit grant list, and a deny list of models that must not be quoted into a
-channel other people read.
+A connected user can let the assistant query Odoo. Reads follow the API key:
+read methods on any model that user may read, minus the technical models no
+assistant should see (`ir.config_parameter`, `ir.mail_server`, attachments,
+API keys). Two optional restrictions exist for customers who want the assistant
+weaker than its users: an explicit grant list (`ai.bridge.agent.grant`) and a
+deny list of models that must not be quoted into a channel other people read.
+
+Operations are a different story. A raw `create` skips onchange, defaults and
+sequences, and a raw `write` can break workflows, so neither is exposed. What
+changes data is a **declared tool**: an `ai.tool` record (a Python function, or
+a server action once `ai_tool_server_action` is merged) assigned explicitly to
+an agent and executed with the rights of the person chatting. Skills can carry
+their tools as a bundle, and skills themselves can be loaded on demand.
+
+The full model, layer by layer, with what it protects against and what it does
+not, is in the *Security model* section of `USAGE.md`.
+
+## What the conversation gives the responder
+
+Every message carries the agent definition (instructions, skills, knowledge,
+language-model hint), the browsing context of the user, the attachments, the
+history of the thread and the capability tier. While a run works, the responder
+can post transient progress notes (`/ai_agent/progress`) that are removed when
+the answer lands. Answers may be plain text, Markdown or HTML, with files
+attached, and are posted in the thread that asked.
 
 ## What this module deliberately does not do
 

@@ -55,6 +55,13 @@ executed in that user's environment, never the agent's AI user and never
 ``sudo``, so Odoo ACLs and record rules apply exactly as if the user had
 clicked in the interface.
 
+A tool is reachable only when it is assigned to the agent, and only for
+users who may read the model it acts on; a record tool also checks the
+record itself. ``readonly`` marks the tools that only read, and an agent
+in *Only read-only tools* mode refuses the others. The whole trust model
+is described in the *Security model* section of the
+``ai_oca_bridge_agent`` module's ``USAGE.md``.
+
 **Table of contents**
 
 .. contents::

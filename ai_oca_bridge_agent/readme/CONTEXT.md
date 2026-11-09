@@ -26,9 +26,10 @@ only has to implement one parser.
 
 The agent keeps **no** conversation state in Odoo: it authenticates with a
 tenant key, reads the session key from the envelope, and answers with a
-`delivery_id`. The Hermes session itself is persistent (`session_scope`: per
-user by default, per channel optionally), which is what gives the assistant a
-memory across messages without storing a transcript in Odoo.
+`delivery_id`. The responder session itself is persistent
+(`session_scope`: per conversation by default, per user optionally), which is
+what gives the assistant a memory across messages without storing a transcript
+in Odoo.
 
 **Atomic claiming**
 
@@ -84,13 +85,38 @@ tickets, notify teams, or route to another Hermes instance.
 
 ## Security Model
 
-- Webhook tokens are auto-generated, rotatable with a grace period (the
-  previous token stays valid for `token_grace_minutes`), compared in constant
-  time and never trusted from the URL alone: the recommended endpoints
-  authenticate with an HMAC signature over `<timestamp>.<body>`;
-- AI users are regular Odoo users with limited permissions;
-- the agent runs with its own credentials and, per user, with that user's
-  API key when there is one;
-- queue rows are protected by a multi-company rule and by an
-  own-messages-only rule for non-managers;
+The full model lives in the *Security model* section of `USAGE.md`; the invariants that must survive any
+refactor are:
+
+- tokens are auto-generated, rotatable with a grace period, compared in constant
+  time; state-changing endpoints authenticate with an HMAC signature over
+  `<timestamp>.<body>`, and an old timestamp is refused;
+- the AI user is a regular Odoo user with limited permissions; answers are
+  posted as that user, and the agent never becomes superuser;
+- data access is the user's own API key, bounded by the model policy: technical
+  `ir.*` models are denied by default, configuration parameters are read one
+  allowlisted key at a time, and a hard list (`ir.config_parameter`,
+  `ir.mail_server`, `res.users.apikeys`, `auth.totp`, `auth.passkey`) can never
+  be opened;
+- declared tools are assigned explicitly and run in the user's environment,
+  never as the AI user and never with `sudo`;
+- queue rows are protected by a multi-company rule and by an own-messages-only
+  rule for non-managers;
 - the Odoo side never executes code sent by the agent.
+
+## Optional companions (loose coupling, no dependency)
+
+The module stays free of optional modules, and uses them when they are there:
+
+- **`ai_tool` / `ai_tool_server_action`**: declared tools, through the glue
+  module `ai_oca_bridge_agent_ai_tool`;
+- **`data_encryption`**: an `ir.config_parameter` value stored in
+  `encrypted.data` is decrypted server-side and reported as present, never
+  disclosed;
+- **`document_page`** (OCA knowledge) and **`automation_oca`**: knowledge sources
+  and triggers belong to glue modules, in the same spirit.
+
+The check is always a registry lookup (`"encrypted.data" in self.env`,
+`"ai.tool" in self.env`), never an import of the other module: no hard
+dependency, no glue module for a hundred lines, and the feature disappears
+cleanly when the module is uninstalled.

@@ -1,9 +1,9 @@
 ## Configuration
 
 1. Create the AI user: a regular Odoo user, member of no group of its own,
-   linked to an `ai.bridge` with usage *Hermes* (this is what makes Discuss
+   linked to an `ai.bridge` with usage *Agent* (this is what makes Discuss
    treat it as an assistant).
-2. Go to *AI Bridge > Hermes > Agents* and create a agent: name, AI user,
+2. Go to *AI agent > Configuration > Agents* and create a agent: name, AI user,
    environment (`prod`/`staging`/`dev`) and the groups allowed to chat with it.
    System administrators always keep access.
 3. Copy the **webhook token** for the polling transport, and the **HMAC secret**
@@ -20,10 +20,10 @@ e.g. `https://responder.example.com/ai_agent/events`. Odoo then posts every new 
 after the transaction commits, signed with:
 
 ```
-X-Hermes-Tenant:    <tenant_key>
-X-Hermes-Timestamp: <unix seconds>
-X-Hermes-Delivery:  <uuid>
-X-Hermes-Signature: sha256=<hmac_sha256(push_secret, "<timestamp>.<raw body>")>
+X-AI-Agent-Tenant:    <tenant_key>
+X-AI-Agent-Timestamp: <unix seconds>
+X-AI-Agent-Delivery:  <uuid>
+X-AI-Agent-Signature: sha256=<hmac_sha256(push_secret, "<timestamp>.<raw body>")>
 ```
 
 A one-minute cron retries whatever the post-commit hook could not deliver, so a
@@ -85,9 +85,17 @@ API key is the user's own, and the module only reports whether it exists.
 |---|---|---|
 | Odoo -> agent | `POST {push_url}` (`/odoo/events` by convention) | HMAC headers |
 | agent -> Odoo | `POST /ai_agent/reply` | HMAC headers |
-| agent -> Odoo | `POST /ai_agent/poll` | `Authorization: Bearer <token>` |
+| agent -> Odoo | `POST /ai_agent/poll` | `Authorization: Bearer <webhook_token>` |
 | agent -> Odoo (legacy) | `POST /ai_agent/webhook/<token>`, `/ai_agent/push/<token>` | token in path |
 | agent -> Odoo | `POST /ai_agent/notify/<token>` | token in path |
+| agent -> Odoo | `POST /ai_agent/credentials` | bearer token |
+| agent -> Odoo | `POST /ai_agent/tools/declared`, `/ai_agent/tools/call` | bearer token |
+| agent -> Odoo | `POST /ai_agent/tools/available`, `/tools/models`, `/tools/resolve` | bearer token |
+| agent -> Odoo | `POST /ai_agent/skills/get` | bearer token |
+| agent -> Odoo | `POST /ai_agent/config/get` | bearer token |
+| agent -> Odoo | `POST /ai_agent/progress` | bearer token |
+| agent -> Odoo | `POST /ai_agent/attachment/<token>/<id>` | token in path |
+| browser -> Odoo | `POST /ai_agent/web_context` | session |
 
 Every JSON answer carries `status` in the body (`ok`/`error` plus an `error`
 code): the JSON-RPC transport always returns HTTP 200, so the status must be
@@ -111,13 +119,17 @@ A user can hand their own API key to the assistant, so answers can be based on
 records **that user** is allowed to see:
 
 1. The administrator enables **Allow users to connect** on the agent.
-2. The user opens **Preferences → Hermes AI** and clicks **Connect Hermes**.
+2. The user opens **Preferences → AI assistant** and clicks **Connect**.
    Odoo creates an API key in that user's own name (scope `rpc`) and leaves it in
    a one-shot hand-off for the agent.
 3. The agent collects it on `/ai_agent/credentials`, stores it encrypted on its
    side, checks it with a real RPC call, and wipes the plaintext in Odoo.
-4. **Disconnect** revokes the key immediately; otherwise it expires after
-   *Credential validity (days)*.
+4. The key is renewable without asking again: a daily cron renews it a week
+   before the date, for users who consented and are still active. After
+   *Credential idle days* without a message the key is revoked and the consent is
+   forgotten, so renewal follows use rather than habit.
+5. **Disconnect** revokes the key immediately and stops any renewal; the user can
+   reconnect from the same screen whenever they want.
 
 Nothing is typed by hand and nothing appears in the chat. Because the key is the
 user's own, the assistant inherits exactly that user's access rights and record
@@ -158,7 +170,7 @@ assistant inherits the user's own API key, so it can read exactly what that user
 can read in the interface, and nothing else. Read methods only (`search_read`,
 `read`, `fields_get`, `search_count`, `read_group`); no write is exposed yet.
 
-A **grant** is the unit of data access (menu **Hermes → Data access**): one
+A **grant** is the unit of data access (menu **AI assistant > Data access**): one
 model, one method, a row cap, an optional field list, the groups that may use
 it, and the agents it applies to (empty means every agent). Grants are rules on
 data, not operations: they answer "which records may the assistant touch",
@@ -178,6 +190,40 @@ access rights:
 The agent checks every call with Odoo before running it and uses the user's
 own key, so a cached grant list or a prompt injection cannot widen either mode.
 `odoo_models` lets the assistant discover what it may query instead of guessing.
+
+## Declared tools: what the assistant may *do*
+
+Reading is one question, doing is another. `ai.bridge.agent.grant` rows bound
+what data may be read; a **tool** declares an operation, with its schema, and is
+only reachable when it is assigned:
+
+- install `ai_oca_bridge_agent_ai_tool` (it depends on OCA `ai_tool`); the agent
+  form then has a **Tools** tab, and skills can carry their own tools as a
+  bundle;
+- the responder lists them with `POST /ai_agent/tools/declared` and runs one
+  with `POST /ai_agent/tools/call`;
+- a tool runs with the rights of the user chatting, never as the agent's AI
+  user; a record tool additionally checks that the user may read the record;
+- `readonly` marks a read-only tool, and **Only read-only tools** on the agent
+  refuses every other one;
+- nothing is assignable by name alone: a tool the agent does not carry answers
+  `tool_not_assigned`, even if the model learned its name elsewhere.
+
+Server actions become tools with `ai_tool_server_action` (merged, or the review
+branch): the same tab lists them, and their code runs in the user's
+environment, so Odoo's ACLs remain the boundary for what the action does.
+
+## Reading instance settings
+
+`ir.config_parameter` is not readable as a model. When the assistant needs an
+instance setting (typically `web.base.url`), it asks for that key:
+
+    POST /ai_agent/config/get   {"user_id": 7, "key": "web.base.url"}
+
+Only keys listed in *Config keys readable* are answered (`*` allows a prefix);
+anything else returns `key_not_allowed` with the list of allowed keys. If the
+key is stored through OCA **data_encryption**, the answer is `{"present": true}`
+and the value never leaves the server.
 
 ## What the user is looking at
 
@@ -208,7 +254,7 @@ the responder applies to every conversation:
   tone, escalation). The responder applies them **after** the customer
   instructions, so a customer edit can never weaken an operator rule.
 - **Skills**: reusable blocks of instructions plus the tool names they expect
-  (Hermes → Skills). Several agents can share one skill.
+  (AI assistant > Skills). Several agents can share one skill.
 - **Knowledge**: plain text sources sent as context, capped by *Knowledge
   budget* so a conversation cannot grow unbounded. Nothing is indexed in Odoo:
   the responder does the retrieval, and a glue module can fill the body from
@@ -279,3 +325,175 @@ arbitrary server file by naming it.
   **Retry** on the queue rows.
 - *Signature rejected*: the agent clock is more than 5 minutes off, or the
   secret does not match the one in Odoo.
+
+## Security model
+
+The assistant is a language model with a live connection to a company database,
+so the module treats it as an untrusted process that happens to be helpful. The
+rules below are enforced in Odoo, on the server, before any data leaves: a
+prompt cannot widen them, and neither can a compromised responder.
+
+This file describes the model, what each layer protects against, and what it
+does not protect against.
+
+**Threat model**
+
+| Adversary | What they can try | What stops them |
+| --- | --- | --- |
+| A user chatting with the assistant | Ask for records they may not read, for other people's data, for secrets | The reply runs under the user's own API key, so Odoo's ACLs and record rules apply; technical models are denied by policy |
+| A prompt injected in the conversation (a document, an email, a web page the assistant reads) | Trick the model into reading more, or into running a tool | Every call is re-resolved server-side against the user's rights, the agent's grants and the model policy; tool assignment is explicit and checked per call |
+| A user who is not allowed to use the assistant | Address the assistant in a channel | Group check before queueing; a configurable refusal, posted at most once per cooldown |
+| The responder process, if compromised | Read every database, keep every credential | It holds only the keys users consented to hand over; each key is `rpc`-scoped, expiring, revocable, and usable only as that user |
+| A leaked webhook token | Post fake answers, replay old ones | Token rotation with a grace window, HMAC signature, timestamp skew, idempotency on `delivery_id` |
+| Another tenant on the same responder | Read this tenant's conversations | Tenant key + environment in the session key; every endpoint authenticates the agent and checks the user belongs to it |
+
+**Who may talk to the assistant**
+
+Access is a group (`Use the AI assistant`), per agent. System administrators
+always keep access so a fresh install stays configurable; remove them from the
+group to test the refusal. A user outside the group gets a configurable standard
+answer, posted at most once per `denial_cooldown_minutes` so a channel is not
+flooded.
+
+**Authentication of the responder channel**
+
+Every call from the responder carries the agent token; every call *to* the
+responder is signed:
+
+- push events carry `X-AI-Agent-Tenant`, `X-AI-Agent-Timestamp`,
+  `X-AI-Agent-Delivery` and `X-AI-Agent-Signature` (HMAC-SHA256 of the body);
+- the signature is compared in constant time, and a timestamp older than
+  300 seconds is refused, which bounds replay;
+- the reply is idempotent on `delivery_id`: a retried delivery never posts
+  twice, and the second attempt returns the original message id.
+
+Rotating a token keeps the previous one valid for a grace window so a running
+responder is not cut off mid-conversation.
+
+**What the assistant may read**
+
+Two independent layers, both server-side:
+
+1. **The user's own API key.** Every query runs with the key of the person who
+   is chatting, so ACLs and record rules apply exactly as in the interface. The
+   assistant cannot read a record its user cannot open.
+2. **A policy above that.** A user's rights are not enough for technical
+   models, which everybody can read and which hold what nobody sees on screen.
+   So:
+
+   - `ir.*` models are **denied by default**, with an allowlist for what an
+     assistant legitimately needs: `ir.model`, `ir.model.fields`, `ir.ui.menu`,
+     `ir.ui.view`, window/url/client/report actions, installed modules and
+     scheduled actions (read-only);
+   - never readable, even if configured: `ir.config_parameter`,
+     `ir.mail_server`, `res.users.apikeys`, `res.users.identitycheck`,
+     `auth.totp`, `auth.passkey`;
+   - everything else follows the agent `tool_access_mode`: **open** (the user's
+     key is the boundary) or **grants only** (`ai.bridge.agent.grant` rows name
+     the model, method, groups, agents, row cap and fields);
+   - a per-agent deny list (`tool_excluded_model_ids`) closes models in both
+     modes, and it is the right answer to the one leak a key cannot prevent:
+     the answer is posted in a Discuss channel that other people read, so
+     payroll or contracts must not be quoted there even when the asker may open
+     them.
+
+   Overrides exist for operators (`model_allowlist` / `model_denylist` on the
+   agent, the `ai_bridge_agent.model_allow` / `model_deny` instance parameters,
+   and the `AI_AGENT_MODEL_ALLOW` / `AI_AGENT_MODEL_DENY` environment
+   variables); deny always wins over allow, and the hard list above wins over
+   both.
+
+Only read methods are exposed for data (`search_read`, `read`, `fields_get`,
+`search_count`, `read_group`). `write` and `unlink` are not reachable, and
+`create` is not exposed either: a raw create skips onchange logic, defaults and
+sequences. Operations that change data go through a declared tool
+(`ai.tool` / server action), which carries its business logic and still runs
+with the user's rights.
+
+**Configuration parameters and secrets**
+
+`ir.config_parameter` is never readable as a model. The module exposes
+`/ai_agent/config/get`, which answers **one key** at a time and only if the
+agent lists it (`config_key_allowlist`, default `web.base.url`, prefixes
+allowed). A refused key returns the list of allowed ones, so the assistant can
+say what it may read instead of guessing.
+
+When OCA **`data_encryption`** is installed, a parameter stored in
+`encrypted.data` is decrypted server-side and reported as `{"present": true}`
+only: the model learns that a secret is configured, never its value. The
+coupling is loose on purpose (the module checks for `encrypted.data` in the
+registry), so there is no dependency and no glue module.
+
+Two more secrets matter here:
+
+- **The Odoo API key** is never stored in clear text: Odoo keeps a hash, and the
+  module hands the plain value to the responder exactly once, then forgets it.
+  The responder keeps it encrypted (Fernet) and bound to the session.
+- **The provider key of the model** is not an Odoo concern: it lives in the
+  responder's own configuration. Putting it in Odoo is possible (encrypted), but
+  the runs API of the reference responder has no per-run credential, so it
+  cannot be forwarded yet; a profile per tenant is the supported shape (see
+  `ROADMAP.md`).
+
+**Consent, renewal and revocation**
+
+Handing an API key to a process is a decision the user makes once, in
+Preferences, and it stays reversible:
+
+- **Connect** creates a dedicated `rpc` key, records the consent
+  (`agent_credential_consent_at`) and hands the key over; the notification says
+  for how long.
+- The key is **renewed automatically** before it expires (daily cron, up to
+  `credential_renew_before_days` before the date), because a key that expires
+  silently turns every read into a refusal while declared tools keep answering.
+  Renewal only ever touches the key the module created, only for users who
+  consented, still in the group, and still active.
+- Renewal **follows use**: after `credential_idle_days` (60 by default) without
+  a single message, the key is revoked and the consent is forgotten; the user
+  reconnects when they come back.
+- **Disconnect** revokes the key and clears the consent, which also stops
+  renewal. Every hand-off records whether it came from a click or from the cron,
+  so an administrator can see why a key changed.
+
+A refused or expired key is reported to the assistant with a hint telling the
+user where to reconnect; the assistant keeps working at the `basic` tier in the
+meantime.
+
+**Declared tools run as the user**
+
+A declared tool (`ai.tool`, including server actions) is assigned explicitly to
+an agent, and it runs in the environment of the person chatting, never as the
+agent's AI user and never with `sudo`. The module checks, per call, that the
+tool is assigned, that the user may read the model it acts on, and that the
+record it targets is visible to them; mutating tools can be refused wholesale
+with `readonly_tools`. This matters because the alternative — a tool running as
+the AI user — is a privilege escalation sitting next to an otherwise per-user
+design.
+
+**What this does not protect against**
+
+Being explicit about the limits is part of the design:
+
+- **The user's own rights are the floor.** A user who may read a contract can
+  ask the assistant about it, and the answer is posted in the channel. Use the
+  deny list when the audience of the channel is wider than the asker's rights.
+- **The responder sees the data it is asked about.** If it is compromised, it
+  sees what the users it serves may see. The mitigation is scope (one agent per
+  purpose, grants where it helps) and revocation, not encryption at rest on the
+  responder's side.
+- **The model provider sees the prompt.** Whatever reaches the model leaves the
+  company; keep secrets out of the prompt by construction, as above.
+- **The Discuss channel is a publication surface.** An answer is visible to every
+  member of the channel, including guests if the channel allows them.
+- **A screenshot is data.** Attachments travel to the responder like the rest,
+  under the same rights, and are deleted from the responder's inbox once the
+  answer is posted.
+
+**Audit trail**
+
+Every message that reaches the assistant is a queue row: who asked, in which
+channel, which agent, which session, how many attempts, the HTTP status of the
+last delivery, the answer's message id and the token usage. Credentials keep
+their origin and their expiry, progress notes are transient and removed with the
+answer, and a refused user leaves a single standard answer instead of a trail of
+attempts.
