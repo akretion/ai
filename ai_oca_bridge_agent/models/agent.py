@@ -4,6 +4,7 @@
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import time
 import uuid
@@ -12,6 +13,8 @@ from datetime import timedelta
 from odoo import _, api, fields, models
 from odoo.release import version as odoo_version
 from odoo.tools.mail import html2plaintext
+
+_logger = logging.getLogger(__name__)
 
 
 class AiBridgeAgent(models.Model):
@@ -101,6 +104,22 @@ class AiBridgeAgent(models.Model):
         "conversation, and nothing has to be reset. 'Per user' keeps one "
         "memory per person across all their threads.",
     )
+    config_key_allowlist = fields.Text(
+        default="web.base.url",
+        help="Instance parameters the assistant may read, comma or newline "
+        "separated. A trailing * allows a prefix. Values stored by "
+        "data_encryption are reported as present, never disclosed.",
+    )
+    model_allowlist = fields.Text(
+        string="Extra allowed models",
+        help="Comma or newline separated models or prefixes to open beside "
+        "the defaults, e.g. ir.config_parameter is never opened this way.",
+    )
+    model_denylist = fields.Text(
+        string="Denied models",
+        help="Comma or newline separated models or prefixes to close for this "
+        "agent. Deny always wins over allow.",
+    )
     credential_auto_renew = fields.Boolean(
         default=True,
         help="Renew the API key of consenting users before it expires, so an "
@@ -109,6 +128,12 @@ class AiBridgeAgent(models.Model):
     credential_renew_before_days = fields.Integer(
         default=7,
         help="Renew a key this many days before it expires.",
+    )
+    credential_idle_days = fields.Integer(
+        default=60,
+        help="Stop renewing, revoke the key and forget the consent after this "
+        "many days without a single message. Renewal should follow use, not "
+        "habit. Zero disables the rule.",
     )
     skill_loading = fields.Selection(
         [("inline", "In the prompt"), ("lazy", "On demand")],
@@ -282,6 +307,63 @@ class AiBridgeAgent(models.Model):
         text = html2plaintext(value or "") if value else ""
         text = text.strip()
         return text[:limit]
+
+    def _config_allowed_keys(self):
+        self.ensure_one()
+        return [
+            key.strip()
+            for key in (self.config_key_allowlist or "").replace("\n", ",").split(",")
+            if key.strip()
+        ]
+
+    def _config_key_allowed(self, key):
+        for allowed in self._config_allowed_keys():
+            if allowed == key or (
+                allowed.endswith("*") and key.startswith(allowed[:-1])
+            ):
+                return True
+        return False
+
+    def _read_config_key(self, key):
+        """Return (found, value, encrypted) for one allowed parameter."""
+        self.ensure_one()
+        found, value, encrypted = self._read_encrypted_key(key)
+        if found:
+            return found, value, encrypted
+        value = self.env["ir.config_parameter"].sudo().get_param(key)
+        if value is None:
+            return False, None, False
+        return True, value, False
+
+    def _read_encrypted_key(self, key):
+        """Read a secret through data_encryption when that module is present.
+
+        Loose coupling on purpose: no dependency, no glue module, and the
+        feature simply disappears when the module is not installed.
+        """
+        if "encrypted.data" not in self.env:
+            return False, None, False
+        encrypted = (
+            self.env["encrypted.data"]
+            .sudo()
+            .search(
+                [("name", "=", key), ("environment", "=", self.environment)], limit=1
+            )
+        )
+        if not encrypted:
+            return False, None, False
+        try:
+            value = encrypted._decrypt_data(self.env)
+        except Exception as exc:  # noqa: BLE001 - a bad key must not break chat
+            _logger.warning("cannot decrypt parameter %s: %s", key, exc)
+            return True, None, True
+        return True, value, True
+
+    def _model_policy(self):
+        """Effective model policy for this agent (see agent_model_policy)."""
+        from .agent_model_policy import ModelPolicy
+
+        return ModelPolicy(self.env, self)
 
     def _get_agent_definition(self):
         """Describe this agent for the responder.

@@ -186,6 +186,20 @@ class TestAgentCredentials(TransactionCase):
                 )
             }
         )
+        # The user is active, so the inactivity rule must not fire.
+        self.env["ai.bridge.agent.message"].create(
+            {
+                "channel_id": self.agent.channel_ids[:1].id
+                or self.env["discuss.channel"]
+                .create({"name": "Renewal", "channel_type": "channel"})
+                .id,
+                "body": "hello",
+                "agent_id": self.agent.id,
+                "user_id": user.id,
+                "session_key": self.agent._get_session_key(user=user),
+                "delivery_id": "renewal-activity",
+            }
+        )
         key = self.env["res.users.apikeys"].sudo().browse(old_key)
         key.write({"create_date": fields.Datetime.now() - timedelta(days=2)})
         # The first hand-off is still waiting for the responder: mark it
@@ -200,7 +214,8 @@ class TestAgentCredentials(TransactionCase):
         handoff = self.Credential.search(
             [("user_id", "=", user.id)], order="id desc", limit=1
         )
-        self.assertEqual(handoff.state, "pending")
+        # The audit trail says why the key exists: a renewal, not a click.
+        self.assertEqual(handoff.origin, "renewal")
 
     def test_no_renewal_without_consent(self):
         before = self.env["res.users.apikeys"].sudo().search_count([])

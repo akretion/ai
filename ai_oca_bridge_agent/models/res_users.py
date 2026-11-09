@@ -67,7 +67,7 @@ class ResUsers(models.Model):
             )
         return agent
 
-    def _agent_create_key(self, agent):
+    def _agent_create_key(self, agent, origin="connect"):
         """Create the dedicated rpc key and hand it to the agent."""
         self.ensure_one()
         ttl_days = agent.credential_ttl_days or 30
@@ -96,7 +96,7 @@ class ResUsers(models.Model):
             }
         )
         self.env["ai.bridge.agent.credential"].sudo()._create_handoff(
-            agent, self, api_key, key.id
+            agent, self, api_key, key.id, origin=origin
         )
         return key, expiry
 
@@ -120,9 +120,83 @@ class ResUsers(models.Model):
                 # A loop of renewals would be worse than an expiring key.
                 return False
             key.unlink()
-        self._agent_create_key(agent)
+        self._agent_create_key(agent, origin="renewal")
         _logger.info("AI agent key renewed for user %s (agent %s)", self.id, agent.name)
+        self._agent_notify_last_channel(
+            agent,
+            _(
+                "Your Odoo access for %(agent)s was renewed until %(date)s. "
+                "You can revoke it any time from your preferences.",
+                agent=agent.name,
+                date=self.agent_credential_expiry,
+            ),
+        )
         return True
+
+    def _agent_revoke_idle_key(self, agent):
+        """Drop the key and the consent of a user who stopped talking."""
+        self.ensure_one()
+        key_id = self.agent_credential_key_id
+        if key_id:
+            key = self.env["res.users.apikeys"].sudo().browse(key_id)
+            if key.exists():
+                key.unlink()
+        self.sudo().write(
+            {
+                "agent_credential_key_id": False,
+                "agent_credential_expiry": False,
+                "agent_credential_consent_at": False,
+            }
+        )
+        _logger.info(
+            "AI agent key revoked after %s days of inactivity for user %s",
+            agent.credential_idle_days,
+            self.id,
+        )
+        self._agent_notify_last_channel(
+            agent,
+            _(
+                "Your Odoo access for %(agent)s expired after %(days)s days "
+                "without use. Open your preferences and connect again when you "
+                "need the assistant.",
+                agent=agent.name,
+                days=agent.credential_idle_days,
+            ),
+        )
+
+    def _agent_notify_last_channel(self, agent, body):
+        """Tell the user in the last thread they used, not in a new one."""
+        self.ensure_one()
+        queued = (
+            self.env["ai.bridge.agent.message"]
+            .sudo()
+            .search(
+                [("user_id", "=", self.id), ("agent_id", "=", agent.id)],
+                order="id desc",
+                limit=1,
+            )
+        )
+        channel = queued.channel_id
+        if not channel or not agent.ai_user_id:
+            return
+        channel.with_user(agent.ai_user_id).with_context(
+            mail_create_nosubscribe=True, mail_notrack=True
+        ).message_post(
+            body=body, message_type="notification", subtype_xmlid="mail.mt_note"
+        )
+
+    def _agent_last_activity(self, agent):
+        """When this user last spoke to the agent, or None."""
+        queued = (
+            self.env["ai.bridge.agent.message"]
+            .sudo()
+            .search(
+                [("user_id", "=", self.id), ("agent_id", "=", agent.id)],
+                order="create_date desc",
+                limit=1,
+            )
+        )
+        return queued.create_date
 
     @api.model
     def _cron_renew_agent_keys(self):
@@ -151,6 +225,16 @@ class ResUsers(models.Model):
             )
             for user in candidates:
                 if not agent._is_user_allowed(user):
+                    continue
+                idle_days = agent.credential_idle_days or 0
+                last_seen = user._agent_last_activity(agent)
+                if idle_days and (
+                    not last_seen
+                    or last_seen < fields.Datetime.now() - timedelta(days=idle_days)
+                ):
+                    # Renewal follows use, not habit: a dormant account keeps no
+                    # live key, and the user simply reconnects when they return.
+                    user._agent_revoke_idle_key(agent)
                     continue
                 expiry = user.agent_credential_expiry
                 if expiry and expiry > horizon:

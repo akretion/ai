@@ -38,6 +38,14 @@ class AiBridgeAgentCredential(models.Model):
         required=True,
         index=True,
     )
+    origin = fields.Selection(
+        [("connect", "User connected"), ("renewal", "Automatic renewal")],
+        default="connect",
+        required=True,
+        readonly=True,
+        help="Why this hand-off exists: the user asked for it, or the cron "
+        "renewed an expiring key they had already consented to.",
+    )
     expires_at = fields.Datetime(required=True)
     delivered_at = fields.Datetime(readonly=True)
 
@@ -105,7 +113,9 @@ class AiBridgeAgentCredential(models.Model):
         )
 
     @api.model
-    def _create_handoff(self, agent, user, api_key, key_id, ttl_minutes=10):
+    def _create_handoff(
+        self, agent, user, api_key, key_id, ttl_minutes=10, origin="connect"
+    ):
         return self.create(
             {
                 "agent_id": agent.id,
@@ -113,6 +123,7 @@ class AiBridgeAgentCredential(models.Model):
                 "session_key": agent._get_session_key(user=user),
                 "api_key": api_key,
                 "key_id": key_id,
+                "origin": origin,
                 "expires_at": fields.Datetime.now() + timedelta(minutes=ttl_minutes),
             }
         )

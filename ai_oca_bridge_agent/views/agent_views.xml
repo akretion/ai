@@ -169,6 +169,22 @@
                                 <field name="knowledge_max_chars" />
                             </group>
                         </page>
+                        <page string="Model access" name="model_policy">
+                            <group>
+                                <field name="config_key_allowlist" />
+                                <field name="model_allowlist" />
+                                <field name="model_denylist" />
+                                <field name="credential_idle_days" />
+                            </group>
+                            <p class="text-muted">
+                                Technical <code>ir.*</code> models are denied by
+                                default; only menus, actions, views, models and
+                                their fields stay readable. <code
+                            >ir.config_parameter</code>
+                                is never readable as a model: list the keys the
+                                assistant may ask for above.
+                            </p>
+                        </page>
                         <page string="Data access" name="grants">
                             <field
                                 name="grant_ids"

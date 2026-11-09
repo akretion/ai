@@ -121,8 +121,16 @@ class AiBridgeAgentGrant(models.Model):
 
     @api.model
     def _open_access(self, user, model_name, method, agent):
-        """Trust the user's own API key: read whatever they may read."""
+        """Trust the user's own API key: read whatever they may read.
+
+        Not quite: technical models are filtered by the agent policy first,
+        because a user who may read ``ir.config_parameter`` in the interface is
+        still not supposed to hand its secrets to a language model.
+        """
         if method not in READ_METHODS:
+            return None
+        policy = agent._model_policy() if agent else self._default_model_policy()
+        if not policy.allows(model_name):
             return None
         model = (
             self.env["ir.model"].sudo().search([("model", "=", model_name)], limit=1)
@@ -142,15 +150,24 @@ class AiBridgeAgentGrant(models.Model):
         }
 
     @api.model
+    def _default_model_policy(self):
+        from .agent_model_policy import ModelPolicy
+
+        return ModelPolicy(self.env)
+
+    @api.model
     def _readable_models(self, user, agent=None):
         """Models the assistant may query for this user, for discovery."""
         if agent and agent.tool_access_mode == "whitelist":
             names = self._for_user(user, agent).mapped("model_name")
         else:
             excluded = agent.tool_excluded_model_ids.mapped("model") if agent else []
+            policy = agent._model_policy() if agent else self._default_model_policy()
             names = []
             for model in self.env["ir.model"].sudo().search([]):
                 if model.model in excluded or model.model not in self.env:
+                    continue
+                if not policy.allows(model.model):
                     continue
                 if self._user_can_read(user, model.model):
                     names.append(model.model)
@@ -168,6 +185,9 @@ class AiBridgeAgentGrant(models.Model):
         "how many".
         """
         if agent and model_name in agent.tool_excluded_model_ids.mapped("model"):
+            return None
+        policy = agent._model_policy() if agent else self._default_model_policy()
+        if not policy.allows(model_name):
             return None
         grants = self._for_user(user, agent).filtered(
             lambda grant: grant.model_name == model_name and grant.method == method

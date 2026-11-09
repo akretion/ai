@@ -1,4 +1,5 @@
 from . import agent_attachment
+from . import agent_config
 from . import agent_context
 from . import agent_credentials
 from . import agent_grants

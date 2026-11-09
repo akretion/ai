@@ -4,6 +4,7 @@ from . import test_agent
 from . import test_attachment_download
 from . import test_attachments
 from . import test_agent_definition
+from . import test_model_policy
 from . import test_multitenant
 from . import test_rendering
 from . import test_reply_endpoint
