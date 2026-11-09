@@ -415,9 +415,18 @@ clicked in the interface.</p>
 <h2><a class="toc-backref" href="#toc-entry-1">Usage</a></h2>
 <div class="section" id="assign-tools-to-an-agent">
 <h3><a class="toc-backref" href="#toc-entry-2">Assign tools to an agent</a></h3>
-<p>Open <strong>Hermes → Configuration → Agents</strong>, pick an agent and use the
-<strong>Tools</strong> tab. Add the <tt class="docutils literal">ai.tool</tt> records this agent may run. An agent
-with no tool runs none: assignment is explicit on purpose.</p>
+<p>Tools reach an agent two ways, and both are explicit:</p>
+<ul class="simple">
+<li>directly, on the agent form, <strong>Tools</strong> tab: add the <tt class="docutils literal">ai.tool</tt>
+records this agent may run;</li>
+<li>through a <strong>skill</strong>: a skill carries its tools like a bundle, so
+putting “Search Database” on an agent brings its tools with it,
+exactly as a reusable prompt pack should. A tool listed both ways is
+offered once.</li>
+</ul>
+<p>An agent with no tool and no skill runs none. <strong>Only read-only tools</strong>
+refuses every tool not flagged <tt class="docutils literal">readonly</tt>, which is how an assistant
+stays useful without being able to change a record.</p>
 <p>A tool is offered only when the user talking to the agent may read the
 model the tool acts on. The check is a courtesy: the boundary is the
 user’s own access rights, applied when the tool runs.</p>
@@ -441,8 +450,10 @@ POST /ai_agent/tools/call
 a record; <tt class="docutils literal">record_model</tt> is the model of that record for a
 <tt class="docutils literal">generic_model</tt> tool, whose own model is the one holding the function.</p>
 <p>Refusals are explicit: <tt class="docutils literal">unknown_user</tt>, <tt class="docutils literal">user_not_allowed</tt>,
-<tt class="docutils literal">missing_tool</tt>, <tt class="docutils literal">tool_not_assigned</tt>, <tt class="docutils literal">bad_arguments</tt>,
-<tt class="docutils literal">tool_failed</tt> with a short message.</p>
+<tt class="docutils literal">missing_tool</tt>, <tt class="docutils literal">tool_not_assigned</tt>, <tt class="docutils literal">tool_not_readonly</tt>,
+<tt class="docutils literal">bad_arguments</tt>, <tt class="docutils literal">tool_failed</tt> with a short message. Each definition
+carries <tt class="docutils literal">readonly</tt> and <tt class="docutils literal">kind</tt> so the responder can present mutating
+tools differently.</p>
 </div>
 <div class="section" id="server-actions-as-tools">
 <h3><a class="toc-backref" href="#toc-entry-4">Server actions as tools</a></h3>

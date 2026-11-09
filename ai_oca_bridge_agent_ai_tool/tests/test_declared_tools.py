@@ -71,9 +71,7 @@ class TestDeclaredTools(TransactionCase):
         self.agent.tool_ids = [(6, 0, tool.ids)]
         result = tool._run_for_user(self.user, {}, record_id=self.partner.id)
         self.assertEqual(result[0]["id"], self.partner.id)
-        self.assertEqual(
-            result[0]["display_name"], "Tool partner"
-        )
+        self.assertEqual(result[0]["display_name"], "Tool partner")
 
     def test_record_tool_refuses_a_record_the_user_cannot_read(self):
         private = self.env["res.partner"].create(
@@ -114,6 +112,51 @@ class TestDeclaredTools(TransactionCase):
         )
         self.agent.tool_ids = [(6, 0, tool.ids)]
         self.assertFalse(self.agent._get_declared_tools(self.user))
+
+    def test_a_skill_brings_its_tools_to_the_agent(self):
+        skill = self.env["ai.bridge.agent.skill"].create(
+            {
+                "name": "Date answers",
+                "summary": "Tell the date",
+                "instructions": "<p>Answer with the date.</p>",
+                "tool_ids": [(6, 0, self.date_tool.ids)],
+            }
+        )
+        self.agent.skill_ids = [(6, 0, skill.ids)]
+        self.assertFalse(self.agent.tool_ids)
+        self.assertEqual(self.agent._get_declared_tools(self.user), self.date_tool)
+        self.assertEqual(
+            self.agent._find_declared_tool(self.user, "get_date"), self.date_tool
+        )
+        self.assertIn("get_date", skill._as_skill_dict()["tools"])
+        self.assertEqual(
+            skill._as_skill_dict()["declared_tools"][0]["name"], "get_date"
+        )
+
+    def test_a_tool_found_twice_is_offered_once(self):
+        skill = self.env["ai.bridge.agent.skill"].create(
+            {
+                "name": "Date again",
+                "instructions": "<p>Again.</p>",
+                "tool_ids": [(6, 0, self.date_tool.ids)],
+            }
+        )
+        self.agent.write(
+            {
+                "tool_ids": [(6, 0, self.date_tool.ids)],
+                "skill_ids": [(6, 0, skill.ids)],
+            }
+        )
+        self.assertEqual(len(self.agent._get_declared_tools(self.user)), 1)
+
+    def test_readonly_agent_refuses_a_mutating_tool(self):
+        self.agent.tool_ids = [(6, 0, self.post_tool.ids)]
+        self.assertFalse(self.post_tool.readonly)
+        self.agent.readonly_tools = True
+        self.assertFalse(self.agent._get_declared_tools(self.user))
+        self.assertFalse(self.agent._find_declared_tool(self.user, "post_message"))
+        self.post_tool.readonly = True
+        self.assertEqual(self.agent._get_declared_tools(self.user), self.post_tool)
 
 
 @tagged("post_install", "-at_install")
@@ -168,9 +211,7 @@ class TestDeclaredToolEndpoint(HttpCase):
     def test_declared_and_call(self):
         tool = self.env.ref("ai_tool.current_date")
         self.agent.tool_ids = [(6, 0, tool.ids)]
-        declared = self._post(
-            "/ai_agent/tools/declared", {"user_id": self.user.id}
-        )
+        declared = self._post("/ai_agent/tools/declared", {"user_id": self.user.id})
         self.assertEqual(declared["status"], "ok")
         self.assertEqual([t["name"] for t in declared["tools"]], ["get_date"])
         called = self._post(

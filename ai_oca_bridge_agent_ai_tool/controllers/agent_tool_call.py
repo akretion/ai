@@ -33,7 +33,10 @@ class AgentToolCall(http.Controller):
         tools = agent._get_declared_tools(user)
         return {
             "status": "ok",
-            "tools": [tool._get_tool_definition() for tool in tools],
+            "readonly_only": bool(agent.readonly_tools),
+            "tools": [
+                request.env["ai.tool"]._bridge_tool_definition(tool) for tool in tools
+            ],
         }
 
     @http.route(
@@ -57,8 +60,13 @@ class AgentToolCall(http.Controller):
         name = (data.get("tool") or "").strip()
         if not name:
             return {"status": "error", "error": "missing_tool"}
+        candidates = (agent.tool_ids | agent.skill_ids.tool_ids).filtered(
+            lambda candidate: candidate.name == name
+        )
         tool = agent._find_declared_tool(user, name)
         if not tool:
+            if len(candidates) == 1 and agent.readonly_tools:
+                return {"status": "error", "error": "tool_not_readonly"}
             return {"status": "error", "error": "tool_not_assigned"}
         arguments = data.get("arguments") or {}
         if not isinstance(arguments, dict):
@@ -88,9 +96,7 @@ class AgentToolCall(http.Controller):
             json.dumps(result)
         except TypeError:
             result = {"result": str(result)}
-        _logger.info(
-            "tool %s run by user %s on agent %s", name, user.id, agent.id
-        )
+        _logger.info("tool %s run by user %s on agent %s", name, user.id, agent.id)
         return {"status": "ok", "result": result or {}}
 
     def _get_agent(self):

@@ -1,7 +1,7 @@
 # Copyright 2026-TODAY Akretion - Raphael Valyi <raphael.valyi@akretion.com>
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 
-from odoo import _, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import AccessError
 
 
@@ -16,6 +16,19 @@ class AiTool(models.Model):
         string="Agents",
         help="Bridge agents allowed to run this tool.",
     )
+    readonly = fields.Boolean(
+        help="The tool only reads. An agent in 'Only read-only tools' mode "
+        "refuses every other tool, which is how a customer keeps an assistant "
+        "helpful without letting it change anything.",
+    )
+
+    @api.model
+    def _bridge_tool_definition(self, tool):
+        """Definition handed to the responder, with the flags it needs."""
+        definition = tool._get_tool_definition()
+        definition["readonly"] = bool(tool.readonly)
+        definition["kind"] = tool.kind
+        return definition
 
     def _tool_model_name(self):
         """Model the tool's *record* belongs to, when the tool needs one.
@@ -91,7 +104,9 @@ class AiTool(models.Model):
             record = arguments.pop("record", None)
             active_id = record.id if record else False
             active_model = (
-                record._name if record else tool.server_action_id.model_id.model or False
+                record._name
+                if record
+                else (tool.server_action_id.model_id.model or False)
             )
             result = action.with_context(
                 tool_args=arguments,
@@ -132,9 +147,7 @@ class AiTool(models.Model):
                 )
             record = self.env[model_name].with_user(user).browse(int(record_id))
             if not record.exists():
-                raise AccessError(
-                    _("That record does not exist or is not accessible.")
-                )
+                raise AccessError(_("That record does not exist or is not accessible."))
             # Raises when a record rule keeps it out of reach for that user.
             record.check_access("read")
         arguments = dict(arguments or {})

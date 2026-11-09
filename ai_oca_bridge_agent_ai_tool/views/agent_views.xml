@@ -9,15 +9,42 @@
         <field name="arch" type="xml">
             <xpath expr="//page[@name='grants']" position="before">
                 <page string="Tools" name="tools">
-                    <field name="tool_ids" widget="many2many_tags" />
+                    <group>
+                        <field name="tool_ids" widget="many2many_tags" />
+                        <field name="readonly_tools" />
+                    </group>
                     <p class="text-muted">
                         Declared operations this agent may perform (an
                         <code>ai.tool</code>, including server actions when
-                        <code>ai_tool_server_action</code> is installed). They
-                        run with the rights of the user talking to the agent.
-                        Data read is governed by the grants on the next tab.
+                        <code>ai_tool_server_action</code> is installed). The
+                        skills of this agent bring their own tools on top of
+                        these. Tools run with the rights of the user talking to
+                        the agent; data read is governed by the grants on the
+                        next tab.
                     </p>
                 </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_skill_form_tools" model="ir.ui.view">
+        <field name="name">ai.bridge.agent.skill.form.tools</field>
+        <field name="model">ai.bridge.agent.skill</field>
+        <field name="inherit_id" ref="ai_oca_bridge_agent.agent_skill_view_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='tool_names']" position="after">
+                <field name="tool_ids" widget="many2many_tags" />
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_skill_list_tools" model="ir.ui.view">
+        <field name="name">ai.bridge.agent.skill.list.tools</field>
+        <field name="model">ai.bridge.agent.skill</field>
+        <field name="inherit_id" ref="ai_oca_bridge_agent.agent_skill_view_list" />
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='tool_names']" position="after">
+                <field name="tool_ids" widget="many2many_tags" optional="show" />
             </xpath>
         </field>
     </record>

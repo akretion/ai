@@ -4,7 +4,7 @@
 {
     "name": "AI Bridge Agent - AI Tool",
     "summary": "Let a bridge agent run OCA AI tools under the user's own rights",
-    "version": "18.0.1.0.0",
+    "version": "18.0.1.1.0",
     "license": "AGPL-3",
     "author": "Akretion,Odoo Community Association (OCA)",
     "website": "https://github.com/OCA/ai",
