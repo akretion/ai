@@ -25,7 +25,17 @@ class AgentContextController(http.Controller):
         ):
             return {"status": "ignored"}
         data = request.get_json_data() or {}
-        context = request.env["ai.bridge.user.context"]._record(user, data)
+        channel = None
+        if data.get("channel_id"):
+            channel = (
+                request.env["discuss.channel"].browse(int(data["channel_id"])).exists()
+            )
+            # The browser may only report a thread the user actually belongs to.
+            if channel and user.partner_id not in channel.channel_member_ids.mapped(
+                "partner_id"
+            ):
+                channel = None
+        context = request.env["ai.bridge.user.context"]._record(user, data, channel)
         return {
             "status": "ok",
             "model": context.model_name,

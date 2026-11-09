@@ -27,6 +27,13 @@ class AiBridgeUserContext(models.Model):
     user_id = fields.Many2one(
         "res.users", required=True, ondelete="cascade", index=True
     )
+    channel_id = fields.Many2one(
+        "discuss.channel",
+        ondelete="cascade",
+        index=True,
+        help="Conversation the user was in. Empty is the user's last context "
+        "anywhere, used when the thread has none of its own.",
+    )
     url = fields.Char(help="Full URL reported by the browser.")
     action_id = fields.Char()
     action_name = fields.Char()
@@ -36,7 +43,11 @@ class AiBridgeUserContext(models.Model):
     updated_at = fields.Datetime()
 
     _sql_constraints = [
-        ("user_uniq", "unique(user_id)", "One browsing context per user."),
+        (
+            "user_channel_uniq",
+            "unique(user_id, channel_id)",
+            "One browsing context per user and conversation.",
+        ),
     ]
 
     # ------------------------------------------------------------- URL parsing
@@ -69,7 +80,7 @@ class AiBridgeUserContext(models.Model):
         return values
 
     @api.model
-    def _record(self, user, data):
+    def _record(self, user, data, channel=None):
         """Store the browsing context reported by one user's browser."""
         if not user:
             return self.browse()
@@ -85,9 +96,16 @@ class AiBridgeUserContext(models.Model):
             "res_id": int(parsed["id"]) if str(parsed.get("id") or "").isdigit() else 0,
             "view_type": parsed.get("view_type") or "",
             "action_name": (data.get("action_name") or "").strip()[:200],
+            "channel_id": channel.id if channel else False,
             "updated_at": fields.Datetime.now(),
         }
-        context = self.sudo().search([("user_id", "=", user.id)], limit=1)
+        context = self.sudo().search(
+            [
+                ("user_id", "=", user.id),
+                ("channel_id", "=", channel.id if channel else False),
+            ],
+            limit=1,
+        )
         if context:
             context.write(values)
         else:
@@ -119,8 +137,22 @@ class AiBridgeUserContext(models.Model):
         stale.unlink()
 
     @api.model
-    def _get_for_user(self, user):
+    def _get_for_user(self, user, channel=None):
+        """Context of that conversation, falling back to the user's last one.
+
+        A thread keeps its own row so a conversation started from a form view
+        does not inherit the context of another thread opened elsewhere.
+        """
         if not user:
             return {}
-        context = self.sudo().search([("user_id", "=", user.id)], limit=1)
+        context = self.sudo().search(
+            [("user_id", "=", user.id), ("channel_id", "=", channel.id)]
+            if channel
+            else [("user_id", "=", user.id), ("channel_id", "=", False)],
+            limit=1,
+        )
+        if not context and channel:
+            context = self.sudo().search(
+                [("user_id", "=", user.id), ("channel_id", "=", False)], limit=1
+            )
         return context._as_context_dict() if context else {}

@@ -35,12 +35,20 @@ class AiBridgeAgentSkill(models.Model):
     )
     active = fields.Boolean(default=True)
 
-    def _as_skill_dict(self):
+    def _as_skill_dict(self, lazy=False):
+        """Describe the skill to the responder.
+
+        In lazy mode the text is withheld: the model gets the summary and loads
+        the body through ``/ai_agent/skills/get`` only when it needs it, the
+        same progressive disclosure OCA ``ai_tool_skill`` gets by making a
+        skill a callable ``ai.tool``.
+        """
         self.ensure_one()
         return {
             "name": self.name,
             "summary": self.summary or "",
-            "instructions": self.instructions or "",
+            "instructions": "" if lazy else (self.instructions or ""),
+            "lazy": bool(lazy and self.instructions),
             "tools": [
                 name.strip()
                 for name in (self.tool_names or "").split(",")

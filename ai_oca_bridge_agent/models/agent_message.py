@@ -51,6 +51,15 @@ class AiBridgeAgentMessage(models.Model):
         index=True,
         help="AI agent session this message belongs to.",
     )
+    progress_message_ids = fields.Json(
+        default=list,
+        help="Notes posted while the agent worked, deleted once the answer "
+        "lands so the thread keeps only the conversation.",
+    )
+    context_json = fields.Json(
+        help="Browsing context captured when the message was queued, so the "
+        "answer refers to what the user was looking at then, not later.",
+    )
     delivery_id = fields.Char(
         index=True,
         help="Idempotency key of the event pushed to the agent.",
@@ -227,6 +236,7 @@ class AiBridgeAgentMessage(models.Model):
     def _mark_error(self, reason):
         """Record a delivery failure: retry with a backoff, or give up."""
         self.ensure_one()
+        self._clear_progress()
         values = {"error_message": reason, "claimed_at": False, "claimed_by": False}
         if self.attempts >= (self.agent_id.max_attempts or 5):
             values["state"] = "dead"
@@ -235,6 +245,15 @@ class AiBridgeAgentMessage(models.Model):
             values["state"] = "pending"
             values["next_attempt_at"] = fields.Datetime.now() + timedelta(minutes=delay)
         self.write(values)
+
+    def _clear_progress(self):
+        """Delete the transient notes posted while the agent worked."""
+        self.ensure_one()
+        ids = [int(item) for item in (self.progress_message_ids or [])]
+        if ids:
+            self.env["mail.message"].sudo().browse(ids).exists().unlink()
+        if self.progress_message_ids:
+            self.write({"progress_message_ids": []})
 
     def _mark_done(self, response_message_id=False):
         """Close the message after its answer has been posted."""

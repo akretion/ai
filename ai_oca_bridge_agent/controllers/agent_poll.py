@@ -74,9 +74,10 @@ class AgentPoll(http.Controller):
                     "delivery_id": message.delivery_id,
                     "agent_key": agent.agent_key,
                     "attachments": message._get_attachments_payload(),
-                    "view_context": request.env["ai.bridge.user.context"]
+                    "view_context": message.context_json
+                    or request.env["ai.bridge.user.context"]
                     .sudo()
-                    ._get_for_user(message.user_id),
+                    ._get_for_user(message.user_id, message.channel_id),
                     "capabilities": agent._get_capabilities(message),
                     "create_date": message.create_date.isoformat()
                     if message.create_date

@@ -133,6 +133,14 @@
                                 widget="many2many_tags"
                                 options="{'no_create': False}"
                             />
+                            <field name="skill_loading" />
+                            <p class="text-muted">
+                                "On demand" keeps the skill summaries in the
+                                prompt and loads the full text only when the
+                                model calls <code>odoo_skill</code> — the same
+                                progressive disclosure OCA <code>ai_tool_skill</code>
+                                gets by making a skill a tool.
+                            </p>
                             <p class="text-muted">
                                 A skill is a block of instructions plus the
                                 tools it expects. Managed in Hermes → Skills.

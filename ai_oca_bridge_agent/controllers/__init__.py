@@ -3,4 +3,6 @@ from . import agent_context
 from . import agent_credentials
 from . import agent_grants
 from . import agent_poll
+from . import agent_progress
+from . import agent_skills
 from . import agent_webhook

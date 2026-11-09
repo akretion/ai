@@ -216,6 +216,7 @@ class AgentWebhook(http.Controller):
             return self._error(str(exc), "post_failed")
 
         if target:
+            target._clear_progress()
             values = {"delivery_id": delivery_id or target.delivery_id}
             target.write(values)
             target._mark_done(message.id)

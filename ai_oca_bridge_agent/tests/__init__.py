@@ -8,4 +8,5 @@ from . import test_multitenant
 from . import test_rendering
 from . import test_reply_endpoint
 from . import test_grants
+from . import test_lazy_and_progress
 from . import test_transport

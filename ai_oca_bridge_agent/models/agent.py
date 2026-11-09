@@ -92,11 +92,23 @@ class AiBridgeAgent(models.Model):
         "conversation with it.",
     )
     session_scope = fields.Selection(
-        [("user", "Per user"), ("channel", "Per channel")],
-        default="user",
+        [("channel", "Per conversation"), ("user", "Per user")],
+        default="channel",
         required=True,
-        help="Granularity of the persistent AI agent session. 'Per user' keeps "
-        "one conversation per user across all their channels.",
+        help="Granularity of the persistent AI agent session. 'Per "
+        "conversation' gives each Discuss thread its own memory, like the "
+        "sessions OCA ai_agent ties to a channel: a new thread is a new "
+        "conversation, and nothing has to be reset. 'Per user' keeps one "
+        "memory per person across all their threads.",
+    )
+    skill_loading = fields.Selection(
+        [("inline", "In the prompt"), ("lazy", "On demand")],
+        default="inline",
+        required=True,
+        help="How skills are handed to the responder. 'In the prompt' sends "
+        "every skill text with each message; 'On demand' sends the summaries "
+        "and lets the model load a skill with the odoo_skill tool, the way "
+        "OCA ai_tool_skill lets a skill be called like a tool.",
     )
     push_enabled = fields.Boolean(
         help="Push new messages to the AI agent in real time. When "
@@ -286,8 +298,10 @@ class AiBridgeAgent(models.Model):
             "backend": self.backend,
             "instructions": self._agent_instructions_plaintext(self.instructions),
             "operator_instructions": (self.operator_instructions or "").strip(),
+            "skill_loading": self.skill_loading,
             "skills": [
-                skill._as_skill_dict() for skill in self.skill_ids.filtered("active")
+                skill._as_skill_dict(lazy=self.skill_loading == "lazy")
+                for skill in self.skill_ids.filtered("active")
             ],
             "knowledge": knowledge,
             "llm": {
@@ -328,11 +342,15 @@ class AiBridgeAgent(models.Model):
     def _get_session_key(self, user=None, channel=None):
         """Build the AI agent session key for this tenant and scope."""
         self.ensure_one()
-        if self.session_scope == "channel" or not user:
-            scope = f"channel_{channel.id if channel else 0}"
-        else:
-            scope = f"user_{user.id}"
-        return f"odoo:{self.tenant_key}:{self.environment}:{scope}"
+        # The user id stays in the key whatever the scope: the responder maps
+        # a session back to a person (credentials, tools) from that id.
+        user_part = f"user_{user.id if user else 0}"
+        if self.session_scope == "channel":
+            return (
+                f"odoo:{self.tenant_key}:{self.environment}:"
+                f"{user_part}:channel_{channel.id if channel else 0}"
+            )
+        return f"odoo:{self.tenant_key}:{self.environment}:{user_part}"
 
     @api.model
     def _find_by_token(self, token):
@@ -440,9 +458,10 @@ class AiBridgeAgent(models.Model):
             "agent_key": self.agent_key,
             "agent": self._get_agent_definition(),
             "attachments": message._get_attachments_payload(),
-            "view_context": self.env["ai.bridge.user.context"]
+            "view_context": message.context_json
+            or self.env["ai.bridge.user.context"]
             .sudo()
-            ._get_for_user(message.user_id),
+            ._get_for_user(message.user_id, message.channel_id),
             "session_key": session_key,
             "delivery_id": message.delivery_id,
             "message": {

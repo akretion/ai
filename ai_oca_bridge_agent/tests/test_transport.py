@@ -80,7 +80,7 @@ class TestAgentTransport(TransactionCase):
         self.assertEqual(len(queued), 1)
         self.assertEqual(queued.user_id, self.human)
         self.assertTrue(queued.session_key.startswith("odoo:"))
-        self.assertTrue(queued.session_key.endswith(f"user_{self.human.id}"))
+        self.assertIn(f"user_{self.human.id}", queued.session_key)
         self.assertTrue(queued.delivery_id)
         self.assertEqual(queued.company_id, self.env.company)
         self.assertEqual(queued.body_text, "hello")

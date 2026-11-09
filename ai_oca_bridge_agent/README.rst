@@ -515,6 +515,35 @@ Note: Odoo stores API keys hashed, so a key cannot be read back later.
 The hand-off is therefore one-shot: if the agent loses it, the user
 reconnects.
 
+Conversations, skills on demand, and live progress
+--------------------------------------------------
+
+Three behaviours follow the agent framework OCA is building in
+``ai_tool_skill`` and ``ai_agent``; they are implemented here on our own
+models, behind the same ideas, so the two can share one abstraction
+later:
+
+- **One memory per conversation** (``session_scope = Per conversation``,
+  the default): the session key carries the thread, so a new Discuss
+  channel starts a fresh conversation and nothing has to be reset by
+  hand. ``Per user`` keeps a single memory across all of a person's
+  threads.
+- **Skills on demand** (``skill_loading = On demand``): the agent
+  definition carries the skill summaries, and the model loads a skill's
+  text with the ``odoo_skill`` tool (``/ai_agent/skills/get``). This is
+  the same progressive disclosure ``ai_tool_skill`` gets by making a
+  skill a callable tool, and it keeps long skill texts out of every
+  message.
+- **Progress notes**: while a run works, the responder posts temporary
+  notes (``/ai_agent/progress``: "Thinking...", one line per Odoo call)
+  and they are deleted when the answer lands, so the thread keeps only
+  the conversation.
+
+The browsing context is captured server-side when the message is queued
+and stored on the queue row, per conversation, so an answer refers to
+what the user was looking at when they asked, not to whatever page they
+opened meanwhile.
+
 Letting the assistant use Odoo data
 -----------------------------------
 

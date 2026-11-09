@@ -17,6 +17,16 @@ const ENDPOINT = "/ai_agent/web_context";
 
 let lastReportedHref = null;
 
+/** Channel id of a Discuss URL, so the context belongs to that conversation. */
+function currentChannelId(href) {
+    const discuss = href.match(/\/discuss\/(\d+)/);
+    if (discuss) {
+        return parseInt(discuss[1], 10);
+    }
+    const param = href.match(/[?&#]channel(?:_id)?=(\d+)/);
+    return param ? parseInt(param[1], 10) : 0;
+}
+
 async function reportCurrentPage() {
     const href = window.location.href;
     if (href === lastReportedHref) {
@@ -24,7 +34,11 @@ async function reportCurrentPage() {
     }
     lastReportedHref = href;
     try {
-        await rpc(ENDPOINT, {url: href, action_name: document.title});
+        await rpc(ENDPOINT, {
+            url: href,
+            action_name: document.title,
+            channel_id: currentChannelId(href),
+        });
     } catch {
         // Never disturb the user: retry on the next tick.
         lastReportedHref = null;

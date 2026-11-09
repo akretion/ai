@@ -63,6 +63,7 @@ class TestAgentMultitenant(TransactionCase):
         self.assertEqual(self.agent.tenant_key, key)
 
     def test_session_key_user_scope(self):
+        self.agent.session_scope = "user"
         expected = f"odoo:{self.agent.tenant_key}:prod:user_{self.env.user.id}"
         self.assertEqual(
             self.agent._get_session_key(user=self.env.user, channel=self.channel),
@@ -71,11 +72,28 @@ class TestAgentMultitenant(TransactionCase):
 
     def test_session_key_channel_scope(self):
         self.agent.session_scope = "channel"
-        expected = f"odoo:{self.agent.tenant_key}:prod:channel_{self.channel.id}"
+        expected = (
+            f"odoo:{self.agent.tenant_key}:prod:user_{self.env.user.id}"
+            f":channel_{self.channel.id}"
+        )
         self.assertEqual(
             self.agent._get_session_key(user=self.env.user, channel=self.channel),
             expected,
         )
+
+    def test_session_scope_defaults_to_one_memory_per_conversation(self):
+        agent = self.agents.create(
+            {"name": "Scope default", "ai_user_id": self.ai_user.id}
+        )
+        self.assertEqual(agent.session_scope, "channel")
+        other = self.Channel.create({"name": "Other", "channel_type": "channel"})
+        first = agent._get_session_key(user=self.env.user, channel=self.channel)
+        second = agent._get_session_key(user=self.env.user, channel=other)
+        self.assertNotEqual(first, second)
+        # The user id stays readable in both shapes: the responder resolves
+        # credentials and tools from it.
+        self.assertIn(f"user_{self.env.user.id}", first)
+        self.assertIn(f"user_{self.env.user.id}", second)
 
     def test_session_key_includes_environment(self):
         self.agent.environment = "staging"

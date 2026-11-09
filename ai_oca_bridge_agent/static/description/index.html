@@ -904,6 +904,34 @@ the key can be revoked from the same screen.</p>
 The hand-off is therefore one-shot: if the agent loses it, the user
 reconnects.</p>
 </div>
+<div class="section" id="conversations-skills-on-demand-and-live-progress">
+<h2>Conversations, skills on demand, and live progress</h2>
+<p>Three behaviours follow the agent framework OCA is building in
+<tt class="docutils literal">ai_tool_skill</tt> and <tt class="docutils literal">ai_agent</tt>; they are implemented here on our own
+models, behind the same ideas, so the two can share one abstraction
+later:</p>
+<ul class="simple">
+<li><strong>One memory per conversation</strong> (<tt class="docutils literal">session_scope = Per conversation</tt>,
+the default): the session key carries the thread, so a new Discuss
+channel starts a fresh conversation and nothing has to be reset by
+hand. <tt class="docutils literal">Per user</tt> keeps a single memory across all of a person’s
+threads.</li>
+<li><strong>Skills on demand</strong> (<tt class="docutils literal">skill_loading = On demand</tt>): the agent
+definition carries the skill summaries, and the model loads a skill’s
+text with the <tt class="docutils literal">odoo_skill</tt> tool (<tt class="docutils literal">/ai_agent/skills/get</tt>). This is
+the same progressive disclosure <tt class="docutils literal">ai_tool_skill</tt> gets by making a
+skill a callable tool, and it keeps long skill texts out of every
+message.</li>
+<li><strong>Progress notes</strong>: while a run works, the responder posts temporary
+notes (<tt class="docutils literal">/ai_agent/progress</tt>: “Thinking…”, one line per Odoo call)
+and they are deleted when the answer lands, so the thread keeps only
+the conversation.</li>
+</ul>
+<p>The browsing context is captured server-side when the message is queued
+and stored on the queue row, per conversation, so an answer refers to
+what the user was looking at when they asked, not to whatever page they
+opened meanwhile.</p>
+</div>
 <div class="section" id="letting-the-assistant-use-odoo-data">
 <h2>Letting the assistant use Odoo data</h2>
 <p>A connected user can also let the assistant <em>query</em> Odoo. The default
