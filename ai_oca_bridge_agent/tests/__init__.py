@@ -7,5 +7,5 @@ from . import test_agent_definition
 from . import test_multitenant
 from . import test_rendering
 from . import test_reply_endpoint
-from . import test_tools
+from . import test_grants
 from . import test_transport

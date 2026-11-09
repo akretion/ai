@@ -2,25 +2,26 @@
 <!-- Copyright 2026-TODAY Akretion - Raphael Valyi <raphael.valyi@akretion.com>
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
 <odoo>
-    <record id="agent_tool_view_list" model="ir.ui.view">
-        <field name="model">ai.bridge.agent.tool</field>
+    <record id="agent_grant_view_list" model="ir.ui.view">
+        <field name="model">ai.bridge.agent.grant</field>
         <field name="arch" type="xml">
-            <list string="AI agent tools" editable="bottom">
+            <list string="Data access grants" editable="bottom">
                 <field name="sequence" widget="handle" />
                 <field name="name" />
                 <field name="description" />
                 <field name="model_name" />
                 <field name="method" />
+                <field name="agent_ids" widget="many2many_tags" />
                 <field name="allowed_group_ids" widget="many2many_tags" />
                 <field name="max_limit" />
                 <field name="active" />
             </list>
         </field>
     </record>
-    <record id="agent_tool_view_form" model="ir.ui.view">
-        <field name="model">ai.bridge.agent.tool</field>
+    <record id="agent_grant_view_form" model="ir.ui.view">
+        <field name="model">ai.bridge.agent.grant</field>
         <field name="arch" type="xml">
-            <form string="AI agent tool">
+            <form string="Data access grant">
                 <sheet>
                     <group>
                         <field name="name" />
@@ -30,7 +31,8 @@
                         <field name="max_limit" />
                         <field name="active" />
                     </group>
-                    <group string="Access">
+                    <group string="Applies to">
+                        <field name="agent_ids" widget="many2many_tags" />
                         <field name="allowed_group_ids" widget="many2many_tags" />
                     </group>
                     <group string="Fields">
@@ -40,25 +42,26 @@
             </form>
         </field>
     </record>
-    <record id="agent_tool_action" model="ir.actions.act_window">
-        <field name="name">Tools</field>
-        <field name="res_model">ai.bridge.agent.tool</field>
+    <record id="agent_grant_action" model="ir.actions.act_window">
+        <field name="name">Data access</field>
+        <field name="res_model">ai.bridge.agent.grant</field>
         <field name="view_mode">list,form</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
-                Add the first tool the assistant may use
+                Add the first data access grant
             </p>
             <p>
-                A tool opens one model, with one read method, to the users in
-                the groups you choose.
+                A grant opens one model, with one read method, to the agents and
+                the groups you choose. Grants answer questions; tools perform
+                operations.
             </p>
         </field>
     </record>
     <menuitem
-        id="menu_agent_tool"
-        name="Tools"
+        id="menu_agent_grant"
+        name="Data access"
         parent="menu_agent_root"
-        action="agent_tool_action"
+        action="agent_grant_action"
         sequence="20"
     />
 </odoo>

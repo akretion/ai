@@ -127,7 +127,7 @@ the same screen.
 Note: Odoo stores API keys hashed, so a key cannot be read back later. The
 hand-off is therefore one-shot: if the agent loses it, the user reconnects.
 
-## Letting the assistant use Odoo tools
+## Letting the assistant use Odoo data
 
 A connected user can also let the assistant *query* Odoo. The default policy is
 **Any model the user may read** (`tool_access_mode` on the agent): the
@@ -135,21 +135,25 @@ assistant inherits the user's own API key, so it can read exactly what that user
 can read in the interface, and nothing else. Read methods only (`search_read`,
 `read`, `fields_get`, `search_count`, `read_group`); no write is exposed yet.
 
+A **grant** is the unit of data access (menu **Hermes → Data access**): one
+model, one method, a row cap, an optional field list, the groups that may use
+it, and the agents it applies to (empty means every agent). Grants are rules on
+data, not operations: they answer "which records may the assistant touch",
+while tools answer "what operations can it perform".
+
 Two optional restrictions, for customers who want to be stricter than Odoo's own
 access rights:
 
-- **Only the Tools list** (`tool_access_mode = whitelist`): the assistant may
-  only touch the models listed under **Hermes → Tools**, for the groups
-  bound to each record. Each record carries one model, one method, a row cap and
-  an optional field list. `fields_get` and `search_count` are implied by a read
-  grant on the same model.
+- **Only the grants** (`tool_access_mode = whitelist`): the assistant may only
+  touch the models named by a grant bound to its agent and the user's groups.
+  `fields_get` and `search_count` are implied by a read grant on the same model.
 - **Models hidden from the assistant**: a deny list that applies in both modes.
   Its real use is not secrecy but privacy in the channel — an answer is posted
   in Discuss where other members read it, so a customer may keep payroll or
   contracts out of the assistant even though the user could open them.
 
 The agent checks every call with Odoo before running it and uses the user's
-own key, so a cached tool list or a prompt injection cannot widen either mode.
+own key, so a cached grant list or a prompt injection cannot widen either mode.
 `odoo_models` lets the assistant discover what it may query instead of guessing.
 
 ## What the user is looking at

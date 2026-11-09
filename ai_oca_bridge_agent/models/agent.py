@@ -221,6 +221,15 @@ class AiBridgeAgent(models.Model):
         "skill_id",
         string="Skills",
     )
+    grant_ids = fields.Many2many(
+        "ai.bridge.agent.grant",
+        "ai_bridge_agent_grant_agent_rel",
+        "agent_id",
+        "grant_id",
+        string="Data access grants",
+        help="Data this agent may touch. Empty grants list means: none "
+        "specific, the policy of the gateway applies.",
+    )
     knowledge_ids = fields.One2many(
         "ai.bridge.agent.knowledge",
         "agent_id",

@@ -5,7 +5,7 @@ from odoo.tests import TransactionCase, tagged
 
 
 @tagged("post_install", "-at_install")
-class TestAgentTools(TransactionCase):
+class TestAgentGrants(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -29,19 +29,21 @@ class TestAgentTools(TransactionCase):
             {"name": "Tools Agent", "ai_user_id": cls.user.id}
         )
         cls.power_group = cls.env["res.groups"].create({"name": "AI agent Power Users"})
-        cls.env.ref("ai_oca_bridge_agent.tool_partners").allowed_group_ids = [
+        cls.env.ref("ai_oca_bridge_agent.grant_partners").allowed_group_ids = [
             (6, 0, [cls.env.ref("base.group_user").id])
         ]
 
     def test_default_tools_are_read_only_search_read(self):
-        tool = self.env["ai.bridge.agent.tool"]._resolve_for_user(self.user, "partners")
+        tool = self.env["ai.bridge.agent.grant"]._resolve_for_user(
+            self.user, "partners"
+        )
         self.assertEqual(tool["model"], "res.partner")
         self.assertEqual(tool["method"], "search_read")
         self.assertEqual(tool["max_limit"], 40)
         self.assertTrue(tool["description"])
 
     def test_user_sees_only_their_groups_tools(self):
-        self.env["ai.bridge.agent.tool"].create(
+        self.env["ai.bridge.agent.grant"].create(
             {
                 "name": "power_moves",
                 "description": "All invoices",
@@ -49,54 +51,56 @@ class TestAgentTools(TransactionCase):
                 "allowed_group_ids": [(6, 0, [self.power_group.id])],
             }
         )
-        user_tools = self.env["ai.bridge.agent.tool"]._for_user(self.user)
+        user_tools = self.env["ai.bridge.agent.grant"]._for_user(self.user)
         self.assertNotIn("power_moves", user_tools.mapped("name"))
         self.assertIsNone(
-            self.env["ai.bridge.agent.tool"]._resolve_for_user(self.user, "power_moves")
+            self.env["ai.bridge.agent.grant"]._resolve_for_user(
+                self.user, "power_moves"
+            )
         )
 
         self.outsider.groups_id = [(4, self.power_group.id)]
         self.assertIn(
             "power_moves",
-            self.env["ai.bridge.agent.tool"]._for_user(self.outsider).mapped("name"),
+            self.env["ai.bridge.agent.grant"]._for_user(self.outsider).mapped("name"),
         )
-        tool = self.env["ai.bridge.agent.tool"]._resolve_for_user(
+        tool = self.env["ai.bridge.agent.grant"]._resolve_for_user(
             self.outsider, "power_moves"
         )
         self.assertEqual(tool["model"], "account.move")
 
     def test_unknown_tool_is_refused(self):
         self.assertIsNone(
-            self.env["ai.bridge.agent.tool"]._resolve_for_user(
+            self.env["ai.bridge.agent.grant"]._resolve_for_user(
                 self.user, "does_not_exist"
             )
         )
 
     def test_archived_tool_is_refused(self):
-        self.env.ref("ai_oca_bridge_agent.tool_products").active = False
+        self.env.ref("ai_oca_bridge_agent.grant_products").active = False
         self.assertIsNone(
-            self.env["ai.bridge.agent.tool"]._resolve_for_user(self.user, "products")
+            self.env["ai.bridge.agent.grant"]._resolve_for_user(self.user, "products")
         )
 
     def test_admin_sees_every_tool(self):
-        tool = self.env["ai.bridge.agent.tool"]._resolve_for_user(
+        tool = self.env["ai.bridge.agent.grant"]._resolve_for_user(
             self.env.ref("base.user_root"), "partners"
         )
         self.assertIsNotNone(tool)
 
     def test_field_whitelist_is_parsed(self):
-        tool = self.env.ref("ai_oca_bridge_agent.tool_partners")
+        tool = self.env.ref("ai_oca_bridge_agent.grant_partners")
         tool.field_names = "name, vat ,"
-        self.assertEqual(tool._as_tool_dict()["fields"], ["name", "vat"])
+        self.assertEqual(tool._as_grant_dict()["fields"], ["name", "vat"])
 
     def test_fields_get_is_implied_by_a_read_grant(self):
-        tool = self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
+        tool = self.env["ai.bridge.agent.grant"]._resolve_for_user_model(
             self.user, "res.partner", "fields_get"
         )
         self.assertIsNotNone(tool)
 
     def test_search_count_is_implied_by_a_read_grant(self):
-        tool = self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
+        tool = self.env["ai.bridge.agent.grant"]._resolve_for_user_model(
             self.user, "res.partner", "search_count"
         )
         self.assertIsNotNone(tool)
@@ -104,19 +108,19 @@ class TestAgentTools(TransactionCase):
 
     def test_implied_search_count_does_not_grant_reading(self):
         self.assertIsNone(
-            self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
+            self.env["ai.bridge.agent.grant"]._resolve_for_user_model(
                 self.user, "ir.config_parameter", "search_count"
             )
         )
 
     def test_implied_fields_get_does_not_grant_reading(self):
-        tool = self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
+        tool = self.env["ai.bridge.agent.grant"]._resolve_for_user_model(
             self.user, "ir.config_parameter", "fields_get"
         )
         self.assertIsNone(tool)
 
     def test_open_mode_allows_any_model_the_user_may_read(self):
-        tool = self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
+        tool = self.env["ai.bridge.agent.grant"]._resolve_for_user_model(
             self.user, "mail.message", "search_read", agent=self.agent
         )
         self.assertIsNotNone(tool)
@@ -125,7 +129,7 @@ class TestAgentTools(TransactionCase):
 
     def test_open_mode_refuses_a_model_the_user_may_not_read(self):
         self.assertIsNone(
-            self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
+            self.env["ai.bridge.agent.grant"]._resolve_for_user_model(
                 self.user,
                 "ir.config_parameter",
                 "search_read",
@@ -136,7 +140,7 @@ class TestAgentTools(TransactionCase):
     def test_open_mode_refuses_writing_methods(self):
         for method in ("create", "write", "unlink"):
             self.assertIsNone(
-                self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
+                self.env["ai.bridge.agent.grant"]._resolve_for_user_model(
                     self.user, "res.partner", method, agent=self.agent
                 )
             )
@@ -146,7 +150,7 @@ class TestAgentTools(TransactionCase):
             (6, 0, [self.env.ref("base.model_res_partner").id])
         ]
         self.assertIsNone(
-            self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
+            self.env["ai.bridge.agent.grant"]._resolve_for_user_model(
                 self.user, "res.partner", "search_read", agent=self.agent
             )
         )
@@ -154,26 +158,66 @@ class TestAgentTools(TransactionCase):
     def test_whitelist_mode_keeps_open_models_out(self):
         self.agent.tool_access_mode = "whitelist"
         self.assertIsNone(
-            self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
+            self.env["ai.bridge.agent.grant"]._resolve_for_user_model(
                 self.user, "mail.message", "search_read", agent=self.agent
             )
         )
         self.assertIsNotNone(
-            self.env["ai.bridge.agent.tool"]._resolve_for_user_model(
+            self.env["ai.bridge.agent.grant"]._resolve_for_user_model(
                 self.user, "res.partner", "search_read", agent=self.agent
             )
         )
 
     def test_readable_models_lists_only_what_the_user_may_read(self):
-        models = self.env["ai.bridge.agent.tool"]._readable_models(
+        models = self.env["ai.bridge.agent.grant"]._readable_models(
             self.user, self.agent
         )
         self.assertIn("res.partner", models)
         self.assertNotIn("ir.config_parameter", models)
 
     def test_user_without_group_has_no_tool(self):
-        tool_model = self.env["ai.bridge.agent.tool"]
-        tool_model.env.ref("ai_oca_bridge_agent.tool_partners").allowed_group_ids = [
+        tool_model = self.env["ai.bridge.agent.grant"]
+        tool_model.env.ref("ai_oca_bridge_agent.grant_partners").allowed_group_ids = [
             (6, 0, [self.power_group.id])
         ]
         self.assertFalse(tool_model._resolve_for_user(self.user, "partners"))
+
+    def test_grant_applies_to_every_agent_when_unassigned(self):
+        grant = self.env.ref("ai_oca_bridge_agent.grant_partners")
+        self.assertFalse(grant.agent_ids)
+        other = self.env["ai.bridge.agent"].create(
+            {"name": "Other agent", "ai_user_id": self.user.id}
+        )
+        for agent in (self.agent, other):
+            self.assertIsNotNone(
+                self.env["ai.bridge.agent.grant"]._resolve_for_user(
+                    self.user, "partners", agent
+                )
+            )
+
+    def test_grant_scoped_to_another_agent_is_ignored(self):
+        grant = self.env.ref("ai_oca_bridge_agent.grant_partners")
+        other = self.env["ai.bridge.agent"].create(
+            {"name": "Other agent", "ai_user_id": self.user.id}
+        )
+        grant.agent_ids = [(6, 0, other.ids)]
+        self.assertIsNone(
+            self.env["ai.bridge.agent.grant"]._resolve_for_user(
+                self.user, "partners", self.agent
+            )
+        )
+        self.assertIsNotNone(
+            self.env["ai.bridge.agent.grant"]._resolve_for_user(
+                self.user, "partners", other
+            )
+        )
+
+    def test_open_mode_is_also_scoped_by_the_agent_policy(self):
+        self.agent.tool_excluded_model_ids = [
+            (6, 0, [self.env.ref("base.model_res_partner").id])
+        ]
+        self.assertIsNone(
+            self.env["ai.bridge.agent.grant"]._resolve_for_user_model(
+                self.user, "res.partner", "search_read", agent=self.agent
+            )
+        )

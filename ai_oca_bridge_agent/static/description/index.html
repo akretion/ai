@@ -904,22 +904,27 @@ the key can be revoked from the same screen.</p>
 The hand-off is therefore one-shot: if the agent loses it, the user
 reconnects.</p>
 </div>
-<div class="section" id="letting-the-assistant-use-odoo-tools">
-<h2>Letting the assistant use Odoo tools</h2>
+<div class="section" id="letting-the-assistant-use-odoo-data">
+<h2>Letting the assistant use Odoo data</h2>
 <p>A connected user can also let the assistant <em>query</em> Odoo. The default
 policy is <strong>Any model the user may read</strong> (<tt class="docutils literal">tool_access_mode</tt> on the
 agent): the assistant inherits the user’s own API key, so it can read
 exactly what that user can read in the interface, and nothing else. Read
 methods only (<tt class="docutils literal">search_read</tt>, <tt class="docutils literal">read</tt>, <tt class="docutils literal">fields_get</tt>,
 <tt class="docutils literal">search_count</tt>, <tt class="docutils literal">read_group</tt>); no write is exposed yet.</p>
+<p>A <strong>grant</strong> is the unit of data access (menu <strong>Hermes → Data access</strong>):
+one model, one method, a row cap, an optional field list, the groups
+that may use it, and the agents it applies to (empty means every agent).
+Grants are rules on data, not operations: they answer “which records may
+the assistant touch”, while tools answer “what operations can it
+perform”.</p>
 <p>Two optional restrictions, for customers who want to be stricter than
 Odoo’s own access rights:</p>
 <ul class="simple">
-<li><strong>Only the Tools list</strong> (<tt class="docutils literal">tool_access_mode = whitelist</tt>): the
-assistant may only touch the models listed under <strong>Hermes → Tools</strong>,
-for the groups bound to each record. Each record carries one model,
-one method, a row cap and an optional field list. <tt class="docutils literal">fields_get</tt> and
-<tt class="docutils literal">search_count</tt> are implied by a read grant on the same model.</li>
+<li><strong>Only the grants</strong> (<tt class="docutils literal">tool_access_mode = whitelist</tt>): the assistant
+may only touch the models named by a grant bound to its agent and the
+user’s groups. <tt class="docutils literal">fields_get</tt> and <tt class="docutils literal">search_count</tt> are implied by a
+read grant on the same model.</li>
 <li><strong>Models hidden from the assistant</strong>: a deny list that applies in both
 modes. Its real use is not secrecy but privacy in the channel — an
 answer is posted in Discuss where other members read it, so a customer
@@ -927,9 +932,9 @@ may keep payroll or contracts out of the assistant even though the
 user could open them.</li>
 </ul>
 <p>The agent checks every call with Odoo before running it and uses the
-user’s own key, so a cached tool list or a prompt injection cannot widen
-either mode. <tt class="docutils literal">odoo_models</tt> lets the assistant discover what it may
-query instead of guessing.</p>
+user’s own key, so a cached grant list or a prompt injection cannot
+widen either mode. <tt class="docutils literal">odoo_models</tt> lets the assistant discover what it
+may query instead of guessing.</p>
 </div>
 <div class="section" id="what-the-user-is-looking-at">
 <h2>What the user is looking at</h2>

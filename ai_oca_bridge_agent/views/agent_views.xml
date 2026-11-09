@@ -159,6 +159,18 @@
                                 <field name="knowledge_max_chars" />
                             </group>
                         </page>
+                        <page string="Data access" name="grants">
+                            <field
+                                name="grant_ids"
+                                widget="many2many_tags"
+                                options="{'no_create': False}"
+                            />
+                            <p class="text-muted">
+                                Grants bound what the assistant may read with a
+                                user's own key. Managed in Hermes → Data access;
+                                a grant with no agent applies to all of them.
+                            </p>
+                        </page>
                         <page string="Model" name="model">
                             <group>
                                 <group string="Responder">

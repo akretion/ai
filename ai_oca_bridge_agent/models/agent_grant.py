@@ -14,43 +14,55 @@ METHOD_SELECTION = [
 ]
 
 
-class AiBridgeAgentTool(models.Model):
-    """A whitelisted read access the assistant may use for a set of users.
+class AiBridgeAgentGrant(models.Model):
+    """Data access an agent may use on behalf of a set of users.
 
-    The whitelist is data, not code: an administrator can open a model to the
-    power users of one customer without touching the transport, and a user only
-    ever sees the tools bound to the groups they already belong to.
+    A grant is *not* a tool: it does not describe an operation, it bounds what
+    the agent may read or create with the user's own API key. Tools answer
+    "what can this assistant do", grants answer "which data may it touch".
+
+    The rules are data, not code: a customer can open a model to the power
+    users of one agent without touching the transport, and a user only ever
+    sees the grants bound to their groups and to the agent they talk to.
     """
 
-    _name = "ai.bridge.agent.tool"
-    _description = "AI agent tool allowed for the assistant"
+    _name = "ai.bridge.agent.grant"
+    _description = "AI agent data access grant"
     _order = "sequence, name"
 
     sequence = fields.Integer(default=10)
     name = fields.Char(
         required=True,
-        help="Technical name the assistant calls, e.g. 'partners'.",
+        help="Short name the administrator recognises, e.g. 'partners'.",
     )
     description = fields.Char(
         required=True,
-        help="One sentence the assistant reads to decide when to use the tool.",
+        help="One sentence describing what this grant opens.",
     )
     model_name = fields.Char(
         required=True,
-        help="Odoo model the tool queries, e.g. res.partner.",
+        help="Odoo model the grant opens, e.g. res.partner.",
     )
     method = fields.Selection(
         METHOD_SELECTION,
         required=True,
         default="search_read",
     )
+    agent_ids = fields.Many2many(
+        "ai.bridge.agent",
+        "ai_bridge_agent_grant_agent_rel",
+        "grant_id",
+        "agent_id",
+        string="Agents",
+        help="Agents this grant applies to. Empty means every agent.",
+    )
     allowed_group_ids = fields.Many2many(
         "res.groups",
-        "agent_tool_group_rel",
-        "tool_id",
+        "ai_bridge_agent_grant_group_rel",
+        "grant_id",
         "group_id",
         string="Allowed groups",
-        help="Users in these groups may use the tool. Admins always may.",
+        help="Users in these groups may use the grant. Admins always may.",
     )
     max_limit = fields.Integer(
         default=40,
@@ -63,23 +75,29 @@ class AiBridgeAgentTool(models.Model):
     active = fields.Boolean(default=True)
 
     @api.model
-    def _for_user(self, user):
+    def _for_user(self, user, agent=None):
+        """Grants that apply to this user, for this agent."""
         if not user:
             return self.browse()
         if user._is_admin() or user.has_group("base.group_system"):
-            return self.search([("active", "=", True)])
-        return self.search(
-            [
+            domain = [("active", "=", True)]
+        else:
+            domain = [
                 ("active", "=", True),
                 ("allowed_group_ids", "in", user.groups_id.ids),
             ]
-        )
+        grants = self.search(domain)
+        if agent:
+            grants = grants.filtered(
+                lambda grant: not grant.agent_ids or agent in grant.agent_ids
+            )
+        return grants
 
     @api.model
-    def _resolve_for_user(self, user, name):
-        """Return the tool definition if this user may use it, else None."""
-        tools = self._for_user(user).filtered(lambda tool: tool.name == name)
-        return tools[:1]._as_tool_dict() if tools else None
+    def _resolve_for_user(self, user, name, agent=None):
+        """Return the grant if this user may use it for this agent, else None."""
+        grants = self._for_user(user, agent).filtered(lambda grant: grant.name == name)
+        return grants[:1]._as_grant_dict() if grants else None
 
     @api.model
     def _user_can_read(self, user, model_name):
@@ -102,7 +120,7 @@ class AiBridgeAgentTool(models.Model):
             return False
 
     @api.model
-    def _open_access_grants(self, user, model_name, method, agent):
+    def _open_access(self, user, model_name, method, agent):
         """Trust the user's own API key: read whatever they may read."""
         if method not in READ_METHODS:
             return None
@@ -120,13 +138,14 @@ class AiBridgeAgentTool(models.Model):
             "method": method,
             "max_limit": 80,
             "fields": [],
+            "source": "open",
         }
 
     @api.model
     def _readable_models(self, user, agent=None):
         """Models the assistant may query for this user, for discovery."""
         if agent and agent.tool_access_mode == "whitelist":
-            names = self._for_user(user).mapped("model_name")
+            names = self._for_user(user, agent).mapped("model_name")
         else:
             excluded = agent.tool_excluded_model_ids.mapped("model") if agent else []
             names = []
@@ -150,23 +169,23 @@ class AiBridgeAgentTool(models.Model):
         """
         if agent and model_name in agent.tool_excluded_model_ids.mapped("model"):
             return None
-        grants = self._for_user(user).filtered(
-            lambda tool: tool.model_name == model_name and tool.method == method
+        grants = self._for_user(user, agent).filtered(
+            lambda grant: grant.model_name == model_name and grant.method == method
         )
         if not grants and method in ("fields_get", "search_count"):
-            grants = self._for_user(user).filtered(
-                lambda tool: tool.model_name == model_name
+            grants = self._for_user(user, agent).filtered(
+                lambda grant: grant.model_name == model_name
             )
         if grants:
-            tool = grants[:1]._as_tool_dict()
-            tool["method"] = method
-            return tool
+            grant = grants[:1]._as_grant_dict()
+            grant["method"] = method
+            return grant
         mode = agent.tool_access_mode if agent else "open"
         if mode != "open":
             return None
-        return self._open_access_grants(user, model_name, method, agent)
+        return self._open_access(user, model_name, method, agent)
 
-    def _as_tool_dict(self):
+    def _as_grant_dict(self):
         self.ensure_one()
         return {
             "name": self.name,
@@ -179,4 +198,5 @@ class AiBridgeAgentTool(models.Model):
                 for field in (self.field_names or "").split(",")
                 if field.strip()
             ],
+            "source": "grant",
         }

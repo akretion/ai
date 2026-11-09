@@ -4,8 +4,8 @@ access_agent_manager,ai.bridge.agent manager,model_ai_bridge_agent,base.group_sy
 access_agent_message_user,ai.bridge.agent.message user,model_ai_bridge_agent_message,group_agent_user,1,0,0,0
 access_agent_message_manager,ai.bridge.agent.message manager,model_ai_bridge_agent_message,base.group_system,1,1,1,1
 access_agent_credential_manager,ai.bridge.agent.credential manager,model_ai_bridge_agent_credential,base.group_system,1,1,1,1
-access_agent_tool_user,ai.bridge.agent.tool user,model_ai_bridge_agent_tool,group_agent_user,1,0,0,0
-access_agent_tool_manager,ai.bridge.agent.tool manager,model_ai_bridge_agent_tool,base.group_system,1,1,1,1
+access_agent_grant_user,ai.bridge.agent.grant user,model_ai_bridge_agent_grant,group_agent_user,1,0,0,0
+access_agent_grant_manager,ai.bridge.agent.grant manager,model_ai_bridge_agent_grant,base.group_system,1,1,1,1
 access_agent_skill_user,ai.bridge.agent.skill user,model_ai_bridge_agent_skill,group_agent_user,1,0,0,0
 access_agent_skill_manager,ai.bridge.agent.skill manager,model_ai_bridge_agent_skill,base.group_system,1,1,1,1
 access_agent_knowledge_user,ai.bridge.agent.knowledge user,model_ai_bridge_agent_knowledge,group_agent_user,1,0,0,0
