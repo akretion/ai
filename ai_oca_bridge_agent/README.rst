@@ -886,7 +886,7 @@ to be helpful. The rules below are enforced in Odoo, on the server,
 before any data leaves: a prompt cannot widen them, and neither can a
 compromised responder.
 
-This file describes the model, what each layer protects against, and
+This section describes the model, what each layer protects against, and
 what it does not protect against.
 
 **Threat model**
