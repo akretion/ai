@@ -1,11 +1,14 @@
 # Copyright 2026-TODAY Akretion - Raphael Valyi <raphael.valyi@akretion.com>
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 
-from datetime import datetime
+import logging
+from datetime import datetime, timedelta
 from datetime import time as dtime
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
+
+_logger = logging.getLogger(__name__)
 
 
 class ResUsers(models.Model):
@@ -26,6 +29,13 @@ class ResUsers(models.Model):
         readonly=True, copy=False, help="res.users.apikeys row handed to AI agent."
     )
     agent_credential_expiry = fields.Date(readonly=True, copy=False)
+    agent_credential_consent_at = fields.Datetime(
+        readonly=True,
+        copy=False,
+        help="When the user accepted that the assistant may read their "
+        "records with a dedicated key. Cleared on Disconnect, and the only "
+        "thing that allows the key to be renewed automatically.",
+    )
 
     @api.depends("agent_credential_key_id", "agent_credential_expiry")
     def _compute_agent_has_api_key(self):
@@ -57,18 +67,9 @@ class ResUsers(models.Model):
             )
         return agent
 
-    def action_agent_connect(self):
-        """Create a dedicated API key for this user and hand it to the agent."""
+    def _agent_create_key(self, agent):
+        """Create the dedicated rpc key and hand it to the agent."""
         self.ensure_one()
-        agent = self._get_agent_connect_gateway()
-        if self.agent_has_api_key:
-            return self._agent_notification(
-                _(
-                    "Your Odoo account is already connected to %(agent)s.",
-                    agent=agent.name,
-                ),
-                "info",
-            )
         ttl_days = agent.credential_ttl_days or 30
         key_name = f"AI agent {agent.name}"
         expiry = fields.Date.add(fields.Date.context_today(self), days=ttl_days)
@@ -97,6 +98,93 @@ class ResUsers(models.Model):
         self.env["ai.bridge.agent.credential"].sudo()._create_handoff(
             agent, self, api_key, key.id
         )
+        return key, expiry
+
+    def _agent_renew_key(self, agent, force=False):
+        """Replace our own key with a fresh one, if the consent still holds.
+
+        Consent is the whole justification: the user opted in once, the key is
+        still ``rpc``-scoped, still theirs, still revoked by Disconnect, and
+        this only ever touches the key *we* created for that agent.
+        """
+        self.ensure_one()
+        key_id = self.agent_credential_key_id
+        key = self.env["res.users.apikeys"].sudo().browse(key_id) if key_id else None
+        if key and key.exists():
+            created = key.create_date
+            if (
+                not force
+                and created
+                and fields.Datetime.now() - created < timedelta(hours=12)
+            ):
+                # A loop of renewals would be worse than an expiring key.
+                return False
+            key.unlink()
+        self._agent_create_key(agent)
+        _logger.info("AI agent key renewed for user %s (agent %s)", self.id, agent.name)
+        return True
+
+    @api.model
+    def _cron_renew_agent_keys(self):
+        """Renew the key of consenting users shortly before it expires."""
+        agents = (
+            self.env["ai.bridge.agent"]
+            .sudo()
+            .search(
+                [
+                    ("credential_auto_renew", "=", True),
+                    ("allow_user_connect", "=", True),
+                ]
+            )
+        )
+        for agent in agents:
+            horizon = fields.Date.add(
+                fields.Date.context_today(self),
+                days=agent.credential_renew_before_days or 7,
+            )
+            candidates = self.sudo().search(
+                [
+                    ("agent_credential_consent_at", "!=", False),
+                    ("agent_credential_key_id", "!=", False),
+                    ("active", "=", True),
+                ]
+            )
+            for user in candidates:
+                if not agent._is_user_allowed(user):
+                    continue
+                expiry = user.agent_credential_expiry
+                if expiry and expiry > horizon:
+                    continue
+                pending = (
+                    self.env["ai.bridge.agent.credential"]
+                    .sudo()
+                    .search_count(
+                        [
+                            ("user_id", "=", user.id),
+                            ("agent_id", "=", agent.id),
+                            ("state", "=", "pending"),
+                        ]
+                    )
+                )
+                if pending:
+                    continue
+                user._agent_renew_key(agent)
+
+    def action_agent_connect(self):
+        """Create a dedicated API key for this user and hand it to the agent."""
+        self.ensure_one()
+        agent = self._get_agent_connect_gateway()
+        if self.agent_has_api_key:
+            return self._agent_notification(
+                _(
+                    "Your Odoo account is already connected to %(agent)s.",
+                    agent=agent.name,
+                ),
+                "info",
+            )
+        ttl_days = agent.credential_ttl_days or 30
+        self._agent_create_key(agent)
+        self.sudo().write({"agent_credential_consent_at": fields.Datetime.now()})
         return self._agent_notification(
             _(
                 "Connected to %(agent)s. The assistant can now read your "
@@ -116,7 +204,11 @@ class ResUsers(models.Model):
             if key.exists():
                 key.unlink()
         self.sudo().write(
-            {"agent_credential_key_id": False, "agent_credential_expiry": False}
+            {
+                "agent_credential_key_id": False,
+                "agent_credential_expiry": False,
+                "agent_credential_consent_at": False,
+            }
         )
         self.env["ai.bridge.agent.credential"].sudo().search(
             [("user_id", "=", self.id), ("state", "=", "pending")]

@@ -22,6 +22,16 @@
         <field name="active" eval="True" />
     </record>
 
+    <record id="ir_cron_ai_agent_renew_keys" model="ir.cron">
+        <field name="name">AI agent: Renew approaching API keys</field>
+        <field name="model_id" ref="base.model_res_users" />
+        <field name="state">code</field>
+        <field name="code">model._cron_renew_agent_keys()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="active" eval="True" />
+    </record>
+
     <record id="ir_cron_agent_expire_credentials" model="ir.cron">
         <field name="name">AI agent: Expire uncollected credentials</field>
         <field name="model_id" ref="model_ai_bridge_agent_credential" />

@@ -154,3 +154,80 @@ class TestAgentCredentials(TransactionCase):
         if "expiration_date" in key._fields and key.expiration_date:
             self.assertTrue(payload["key_expires_at"])
             self.assertNotEqual(payload["key_expires_at"], payload["expires_at"])
+
+    def test_key_is_renewed_before_it_expires(self):
+        """A consenting user keeps working without clicking Connect again."""
+        user = self.ResUsers.create(
+            {
+                "name": "Renew me",
+                "login": "renew_me",
+                "email": "renew_me@example.com",
+                "groups_id": [
+                    (
+                        6,
+                        0,
+                        [
+                            self.env.ref("base.group_user").id,
+                            self.env.ref("ai_oca_bridge_agent.group_agent_user").id,
+                        ],
+                    )
+                ],
+            }
+        )
+        self.agent.allow_user_connect = True
+        user.action_agent_connect()
+        old_key = user.agent_credential_key_id
+        self.assertTrue(user.agent_credential_consent_at)
+        # Pretend the key is about to expire, and force past the 12h guard.
+        user.write(
+            {
+                "agent_credential_expiry": fields.Date.add(
+                    fields.Date.context_today(user), days=1
+                )
+            }
+        )
+        key = self.env["res.users.apikeys"].sudo().browse(old_key)
+        key.write({"create_date": fields.Datetime.now() - timedelta(days=2)})
+        # The first hand-off is still waiting for the responder: mark it
+        # collected, otherwise the renewal would stack a second one.
+        self.Credential.search([("user_id", "=", user.id)]).write(
+            {"state": "delivered"}
+        )
+        self.env["res.users"]._cron_renew_agent_keys()
+        user.invalidate_recordset()
+        self.assertNotEqual(user.agent_credential_key_id, old_key)
+        self.assertFalse(self.env["res.users.apikeys"].sudo().browse(old_key).exists())
+        handoff = self.Credential.search(
+            [("user_id", "=", user.id)], order="id desc", limit=1
+        )
+        self.assertEqual(handoff.state, "pending")
+
+    def test_no_renewal_without_consent(self):
+        before = self.env["res.users.apikeys"].sudo().search_count([])
+        self.agent.allow_user_connect = True
+        self.env["res.users"]._cron_renew_agent_keys()
+        self.assertEqual(self.env["res.users.apikeys"].sudo().search_count([]), before)
+
+    def test_disconnect_clears_the_consent(self):
+        user = self.ResUsers.create(
+            {
+                "name": "Disconnect me",
+                "login": "disconnect_me",
+                "email": "disconnect_me@example.com",
+                "groups_id": [
+                    (
+                        6,
+                        0,
+                        [
+                            self.env.ref("base.group_user").id,
+                            self.env.ref("ai_oca_bridge_agent.group_agent_user").id,
+                        ],
+                    )
+                ],
+            }
+        )
+        self.agent.allow_user_connect = True
+        user.action_agent_connect()
+        user.action_agent_disconnect()
+        self.assertFalse(user.agent_credential_consent_at)
+        self.assertFalse(user.agent_credential_key_id)

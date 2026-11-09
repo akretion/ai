@@ -8,7 +8,7 @@
         with per-user identity, an Odoo access policy and a tool whitelist.
         Backend agnostic: Hermes Agent is the reference implementation.
     """,
-    "version": "18.0.6.1.0",
+    "version": "18.0.6.2.0",
     "license": "AGPL-3",
     "author": "Akretion,Odoo Community Association (OCA)",
     "website": "https://github.com/OCA/ai",

@@ -101,6 +101,15 @@ class AiBridgeAgent(models.Model):
         "conversation, and nothing has to be reset. 'Per user' keeps one "
         "memory per person across all their threads.",
     )
+    credential_auto_renew = fields.Boolean(
+        default=True,
+        help="Renew the API key of consenting users before it expires, so an "
+        "active conversation never stops working. Disconnect still revokes.",
+    )
+    credential_renew_before_days = fields.Integer(
+        default=7,
+        help="Renew a key this many days before it expires.",
+    )
     skill_loading = fields.Selection(
         [("inline", "In the prompt"), ("lazy", "On demand")],
         default="inline",

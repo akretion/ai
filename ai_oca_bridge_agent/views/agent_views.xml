@@ -80,6 +80,8 @@
                     <group string="Odoo tools for the assistant">
                         <group>
                             <field name="allow_user_connect" />
+                            <field name="credential_auto_renew" />
+                            <field name="credential_renew_before_days" />
                             <field name="credential_ttl_days" />
                         </group>
                         <group>
