@@ -846,7 +846,11 @@ allow.</td>
 <td>Instance parameters the
 assistant may read, one key
 at a time. Prefixes with
-<tt class="docutils literal">*</tt>.</td>
+<tt class="docutils literal">*</tt>; a trailing <tt class="docutils literal">!</tt> marks
+a key as a secret so the
+answer never quotes it.
+Listing a key sends its value
+to the assistant.</td>
 </tr>
 </tbody>
 </table>
@@ -1470,11 +1474,22 @@ if the agent lists it (<tt class="docutils literal">config_key_allowlist</tt>, d
 allowed ones, so the assistant can say what it may read instead of
 guessing.</p>
 <p>When OCA <strong>``data_encryption``</strong> is installed, a parameter stored in
-<tt class="docutils literal">encrypted.data</tt> is decrypted server-side and reported as
-<tt class="docutils literal">{&quot;present&quot;: true}</tt> only: the model learns that a secret is
-configured, never its value. The coupling is loose on purpose (the
-module checks for <tt class="docutils literal">encrypted.data</tt> in the registry), so there is no
-dependency and no glue module.</p>
+<tt class="docutils literal">encrypted.data</tt> is decrypted server-side and returned like any other
+allowed key, flagged <tt class="docutils literal">secret: true</tt>. The coupling is loose on purpose
+(the module checks for <tt class="docutils literal">encrypted.data</tt> in the registry), so there is
+no dependency and no glue module.</p>
+<p>The flag is the point: <strong>listing a key is the administrator’s decision
+to let the assistant read it</strong>, so refusing to return an encrypted value
+would only make the feature useless. What changes with <tt class="docutils literal">secret</tt> is
+what happens next — the responder is told not to repeat the value in the
+conversation, and the reference bridge keeps every secret it read during
+a run and redacts it from the answer before posting. In other words, the
+assistant may <em>use</em> the token, the way a bridge uses an API token it
+never quotes.</p>
+<p>A plain-text parameter can be marked the same way by writing the entry
+with a trailing <tt class="docutils literal">!</tt> (<tt class="docutils literal">mail.smtp.password!</tt>). Storing it through
+<tt class="docutils literal">data_encryption</tt> is better: the value is encrypted at rest and the
+flag is automatic.</p>
 <p>Two more secrets matter here:</p>
 <ul class="simple">
 <li><strong>The Odoo API key</strong> is never stored in clear text: Odoo keeps a hash,

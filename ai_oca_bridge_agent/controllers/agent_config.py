@@ -10,9 +10,10 @@ agent carries a list of allowed keys and the lookup happens here, one key at a
 time, never through a generic read.
 
 When OCA ``data_encryption`` is installed the value may live in
-``encrypted.data`` instead; we use it if it is there, without depending on it,
-and such values are reported as secrets: the model may confirm they are set,
-never read them.
+``encrypted.data`` instead; we use it if it is there, without depending on it.
+The value is returned either way (the administrator listed that key), flagged as
+a secret so the responder can keep it out of the conversation, the way a bridge
+holds an API token it uses without quoting it.
 """
 
 import logging
@@ -48,21 +49,23 @@ class AgentConfig(http.Controller):
             return {
                 "status": "error",
                 "error": "key_not_allowed",
-                "allowed": agent._config_allowed_keys(),
+                "allowed": [
+                    entry.rstrip("!") for entry in agent._config_allowed_keys()
+                ],
             }
-        found, value, encrypted = agent._read_config_key(key)
+        found, value, secret = agent._read_config_key(key)
         if not found:
             return {"status": "error", "error": "key_not_found"}
-        if encrypted:
-            # A secret stays server-side: the assistant may report that it is
-            # configured, never echo it into a language model's context.
-            return {
-                "status": "ok",
-                "key": key,
-                "secret": True,
-                "present": bool(value),
-            }
-        return {"status": "ok", "key": key, "secret": False, "value": value}
+        # Listing a key is the administrator's decision to let the assistant read
+        # it, even when the value is stored encrypted: refusing here only made
+        # the feature useless. ``secret`` moves the protection one step further,
+        # to the responder, which must not repeat the value in the channel.
+        return {
+            "status": "ok",
+            "key": key,
+            "secret": bool(secret),
+            "value": value,
+        }
 
     def _get_agent(self):
         auth_header = request.httprequest.headers.get("Authorization", "")

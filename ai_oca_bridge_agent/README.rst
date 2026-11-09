@@ -445,7 +445,11 @@ Agent settings
 | Config keys readable | ``web.base.url``     | Instance parameters the       |
 |                      |                      | assistant may read, one key   |
 |                      |                      | at a time. Prefixes with      |
-|                      |                      | ``*``.                        |
+|                      |                      | ``*``; a trailing ``!`` marks |
+|                      |                      | a key as a secret so the      |
+|                      |                      | answer never quotes it.       |
+|                      |                      | Listing a key sends its value |
+|                      |                      | to the assistant.             |
 +----------------------+----------------------+-------------------------------+
 
 The model policy, the credential lifecycle and the trust boundaries are
@@ -1023,11 +1027,24 @@ allowed ones, so the assistant can say what it may read instead of
 guessing.
 
 When OCA **``data_encryption``** is installed, a parameter stored in
-``encrypted.data`` is decrypted server-side and reported as
-``{"present": true}`` only: the model learns that a secret is
-configured, never its value. The coupling is loose on purpose (the
-module checks for ``encrypted.data`` in the registry), so there is no
-dependency and no glue module.
+``encrypted.data`` is decrypted server-side and returned like any other
+allowed key, flagged ``secret: true``. The coupling is loose on purpose
+(the module checks for ``encrypted.data`` in the registry), so there is
+no dependency and no glue module.
+
+The flag is the point: **listing a key is the administrator's decision
+to let the assistant read it**, so refusing to return an encrypted value
+would only make the feature useless. What changes with ``secret`` is
+what happens next — the responder is told not to repeat the value in the
+conversation, and the reference bridge keeps every secret it read during
+a run and redacts it from the answer before posting. In other words, the
+assistant may *use* the token, the way a bridge uses an API token it
+never quotes.
+
+A plain-text parameter can be marked the same way by writing the entry
+with a trailing ``!`` (``mail.smtp.password!``). Storing it through
+``data_encryption`` is better: the value is encrypted at rest and the
+flag is automatic.
 
 Two more secrets matter here:
 

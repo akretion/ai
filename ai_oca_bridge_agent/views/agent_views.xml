@@ -184,6 +184,17 @@
                                 is never readable as a model: list the keys the
                                 assistant may ask for above.
                             </p>
+                            <p class="text-danger">
+                                Listing a key sends its value to the assistant,
+                                which may then quote it in a Discuss thread other
+                                people read. Add a trailing <code>!</code> to
+                                mark a key as a secret (for example
+                                <code>mail.smtp.password!</code>): the assistant
+                                may use it, and the bridge hides it from the
+                                answer. Prefer storing such values with
+                                <code>data_encryption</code>, which marks them
+                                automatically.
+                            </p>
                         </page>
                         <page string="Data access" name="grants">
                             <field

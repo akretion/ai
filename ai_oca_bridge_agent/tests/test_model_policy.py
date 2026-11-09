@@ -119,13 +119,24 @@ class TestConfigKeys(TransactionCase):
         self.assertEqual(value, "https://example.test")
         self.assertFalse(encrypted)
 
-    def test_secret_is_reported_as_present_but_not_disclosed(self):
+    def test_a_marked_key_is_returned_flagged_as_secret(self):
+        """Listing a key is a decision to let it be read, secret or not."""
+        self.agent.config_key_allowlist = "web.base.url, mail.smtp.password!"
+        self.Params.set_param("mail.smtp.password", "s3cr3t-value")
+        found, value, secret = self.agent._read_config_key("mail.smtp.password")
+        self.assertTrue(found)
+        self.assertEqual(value, "s3cr3t-value")
+        self.assertTrue(secret)
+        # The marker is not part of the key itself.
+        self.assertFalse(self.agent._config_key_allowed("mail.smtp.password!"))
+        self.assertTrue(self.agent._config_key_allowed("mail.smtp.password"))
+
+    def test_an_encrypted_value_is_secret_even_when_unmarked(self):
         if "encrypted.data" not in self.env:
             self.skipTest("data_encryption is not installed")
-        found, value, encrypted = self.agent._read_encrypted_key("some.secret")
-        # With the module present the value comes encrypted and flagged; the
-        # controller is what withholds it from the model.
-        self.assertTrue(encrypted or not found)
+        found, value, secret = self.agent._read_encrypted_key("some.secret")
+        if found:
+            self.assertTrue(secret)
 
 
 @tagged("post_install", "-at_install")
@@ -184,6 +195,19 @@ class TestConfigEndpoint(HttpCase):
         self.assertEqual(answer["status"], "ok")
         self.assertEqual(answer["value"], "https://config.example.test")
         self.assertFalse(answer["secret"])
+
+    def test_a_secret_key_is_returned_with_its_flag(self):
+        self.agent.config_key_allowlist = "web.base.url, mail.smtp.password!"
+        self.env["ir.config_parameter"].sudo().set_param(
+            "mail.smtp.password", "hunter2-secret"
+        )
+        answer = self._post(
+            "/ai_agent/config/get",
+            {"user_id": self.human.id, "key": "mail.smtp.password"},
+        )
+        self.assertEqual(answer["status"], "ok")
+        self.assertEqual(answer["value"], "hunter2-secret")
+        self.assertTrue(answer["secret"])
 
     def test_other_key_is_refused_with_the_list(self):
         answer = self._post(

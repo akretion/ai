@@ -107,8 +107,11 @@ class AiBridgeAgent(models.Model):
     config_key_allowlist = fields.Text(
         default="web.base.url",
         help="Instance parameters the assistant may read, comma or newline "
-        "separated. A trailing * allows a prefix. Values stored by "
-        "data_encryption are reported as present, never disclosed.",
+        "separated. A trailing * allows a prefix. Listing a key means its "
+        "value is sent to the assistant: add a trailing ! (mail.smtp.password!) "
+        "to mark it as a secret, so the responder keeps it out of the "
+        "conversation. Values stored with data_encryption are sent decrypted "
+        "and always treated as secrets.",
     )
     model_allowlist = fields.Text(
         string="Extra allowed models",
@@ -309,6 +312,7 @@ class AiBridgeAgent(models.Model):
         return text[:limit]
 
     def _config_allowed_keys(self):
+        """Allowlist entries, as typed (a trailing ! marks a secret)."""
         self.ensure_one()
         return [
             key.strip()
@@ -318,22 +322,38 @@ class AiBridgeAgent(models.Model):
 
     def _config_key_allowed(self, key):
         for allowed in self._config_allowed_keys():
-            if allowed == key or (
-                allowed.endswith("*") and key.startswith(allowed[:-1])
-            ):
+            name = allowed.rstrip("!")
+            if name == key or (name.endswith("*") and key.startswith(name[:-1])):
+                return True
+        return False
+
+    def _config_key_is_secret(self, key):
+        """True when the allowlist marks that key as sensitive.
+
+        Listing a key is the administrator's decision to let the assistant read
+        it; writing it as ``mail.smtp.password!`` (or storing it through
+        data_encryption) says "read it, but it is a secret": the responder is
+        told it must not repeat the value in the conversation.
+        """
+        for allowed in self._config_allowed_keys():
+            if allowed.endswith("!") and allowed[:-1] == key:
                 return True
         return False
 
     def _read_config_key(self, key):
-        """Return (found, value, encrypted) for one allowed parameter."""
+        """Return (found, value, secret) for one allowed parameter.
+
+        A secret is still returned: the administrator listed it. The flag is
+        what tells the responder not to repeat it in the channel.
+        """
         self.ensure_one()
         found, value, encrypted = self._read_encrypted_key(key)
         if found:
-            return found, value, encrypted
+            return found, value, True
         value = self.env["ir.config_parameter"].sudo().get_param(key)
         if value is None:
-            return False, None, False
-        return True, value, False
+            return False, None, self._config_key_is_secret(key)
+        return True, value, self._config_key_is_secret(key)
 
     def _read_encrypted_key(self, key):
         """Read a secret through data_encryption when that module is present.

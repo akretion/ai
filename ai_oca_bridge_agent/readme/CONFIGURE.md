@@ -33,7 +33,7 @@
 | Models hidden from the assistant | none | Deny list applied in both modes, for data that must not be quoted in a channel. |
 | Extra allowed models | empty | Opens a model the default policy closes (prefixes allowed). Secrets stay closed. |
 | Denied models | empty | Closes models for this agent; a deny always wins over an allow. |
-| Config keys readable | `web.base.url` | Instance parameters the assistant may read, one key at a time. Prefixes with `*`. |
+| Config keys readable | `web.base.url` | Instance parameters the assistant may read, one key at a time. Prefixes with `*`; a trailing `!` marks a key as a secret so the answer never quotes it. Listing a key sends its value to the assistant. |
 
 The model policy, the credential lifecycle and the trust boundaries are
 described in the *Security model* section of `USAGE.md`.
