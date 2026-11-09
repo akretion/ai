@@ -6,6 +6,5 @@ from . import agent_knowledge
 from . import agent_skill
 from . import agent_message
 from . import agent_grant
-from . import agent_tools_mock
 from . import discuss_channel
 from . import res_users
